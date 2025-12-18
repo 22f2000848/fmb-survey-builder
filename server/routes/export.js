@@ -1,0 +1,51 @@
+const express = require('express');
+const router = express.Router();
+const fs = require('fs').promises;
+const path = require('path');
+const excelGenerator = require('../services/excelGenerator');
+
+const STORE_PATH = path.join(__dirname, '../data/store.json');
+
+// Read store
+async function readStore() {
+  const data = await fs.readFile(STORE_PATH, 'utf8');
+  return JSON.parse(data);
+}
+
+// GET /api/export/:surveyId - Export survey to Excel
+router.get('/:surveyId', async (req, res) => {
+  try {
+    const store = await readStore();
+    
+    // Find survey
+    const survey = store.surveys.find(s => s.surveyId === req.params.surveyId);
+    if (!survey) {
+      return res.status(404).json({ error: 'Survey not found' });
+    }
+    
+    // Get questions for survey
+    const questions = store.questions.filter(q => q.surveyId === req.params.surveyId);
+    
+    // Generate Excel
+    const workbook = await excelGenerator.generateExcel(survey, questions);
+    
+    // Set response headers
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=${survey.surveyId}_dump.xlsx`
+    );
+    
+    // Write to response
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error('Export error:', error);
+    res.status(500).json({ error: 'Failed to export survey', message: error.message });
+  }
+});
+
+module.exports = router;
