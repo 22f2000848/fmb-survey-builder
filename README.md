@@ -8,8 +8,11 @@ A comprehensive web application for creating and managing surveys with automatic
 - **Question Builder**: Dynamic form-based question creation supporting 12 different question types
 - **Parent-Child Questions**: Support for conditional questions based on parent responses
 - **Excel Export**: Generate Excel dump sheets with exact formatting matching reference specifications
+- **Upload Validation**: Validate CSV/XLSX files against schema before importing data
+- **Enhanced Validation**: Comprehensive validation engine with cross-field validation
 - **Validation**: Built-in validation rules ensuring data quality and format compliance
 - **Multi-language Support**: Support for multiple languages/mediums per survey
+- **Date Pickers**: Calendar-based date selection with time support
 
 ## Tech Stack
 
@@ -187,6 +190,11 @@ The application will open in your browser at `http://localhost:3000`
 
 - `GET /api/export/:surveyId` - Download Excel dump for survey
 
+### Validation
+
+- `POST /api/validate-upload` - Validate CSV/XLSX file (query param: schema=survey|question|both)
+- `GET /api/validation-schema` - Get validation rules schema
+
 ### Health Check
 
 - `GET /api/health` - Server health check
@@ -195,10 +203,16 @@ The application will open in your browser at `http://localhost:3000`
 
 ### Survey Validation
 
-- Survey ID, Name, and Description are required
-- Date format must be DD/MM/YYYY HH:MM:SS
-- Yes/No fields must be exactly "Yes" or "No"
-- Mode must be one of: New Data, Correction, Delete Data, None
+- **Survey ID**: Required, alphanumeric + underscore only (no spaces), pattern: `^[A-Za-z0-9_]+$`
+- **Survey Name**: Required, max 99 characters
+- **Survey Description**: Required, max 256 characters
+- **Available Mediums**: Required, must be from: English, Hindi, Gujarati, Marathi, Tamil, Telugu, Bengali, Bodo, Punjabi, Assamese
+- **Hierarchical Access Level**: Required, numeric values (1-7), comma-separated, no duplicates
+- **Date Format**: Must be DD/MM/YYYY HH:MM:SS or DD/MM/YYYY
+- **Date Comparison**: Close Date must be >= Launch Date
+- **Yes/No Fields**: Must be exactly "Yes" or "No" (public, inSchool, acceptMultipleEntries, isActive, downloadResponse, geoFencing, geoTagging, testSurvey, visibleOnReportBot)
+- **Mode**: Must be one of: New Data, Correction, Delete Data, None
+- **Geo Fencing/Tagging**: If Geo Fencing is "Yes", Geo Tagging must also be "Yes"
 
 ### Question Validation
 
@@ -221,6 +235,53 @@ The application will open in your browser at `http://localhost:3000`
 - Child Question_ID format: Q1.1, Q1.2, etc.
 - Source_Question must reference parent
 - OptionChildren specifies triggering options
+
+## Upload Validation
+
+The FMB Survey Builder now includes a powerful upload validation feature that allows you to validate your CSV or Excel files before importing data into the system.
+
+### How to Use Upload Validation
+
+1. Navigate to **"Validate Upload"** from the navigation menu
+2. Select your file (CSV or XLSX format)
+3. Choose the schema to validate against:
+   - **Survey Master** - validates survey data only
+   - **Question Master** - validates question data only
+   - **Both** - validates both sheets (for XLSX files with multiple sheets)
+4. Click **"Validate"**
+5. Review any errors in the results table
+6. Optionally download errors as CSV for offline review
+
+### Supported File Formats
+
+- **CSV (.csv)** - UTF-8 encoded, comma-separated values
+- **Excel (.xlsx, .xls)** - Microsoft Excel format with one or more sheets
+
+### Validation Features
+
+- **Comprehensive Error Detection**: Validates all rows and collects all errors (does not fail fast)
+- **Field-Level Validation**: Checks each field against defined rules (required, pattern, length, enum, etc.)
+- **Cross-Field Validation**: Validates relationships between fields (e.g., Geo Fencing/Tagging)
+- **Cross-Record Validation**: Validates references between records (e.g., Question medium matches Survey mediums)
+- **Detailed Error Report**: Shows row number, sheet name, field name, error message, and invalid value
+- **Export Errors**: Download validation errors as CSV for easy sharing and tracking
+
+### Validation Results
+
+The validation results include:
+- **Summary Statistics**: Total rows, rows with errors, total error count
+- **Error Details Table**: Complete list of all validation errors with context
+- **Success Indicator**: Clear visual feedback when all rows pass validation
+
+### Example Validation Errors
+
+- Survey ID with spaces: `SB WV 01` → "Survey ID must contain only alphanumeric characters and underscores"
+- Survey Name too long (>99 chars) → "surveyName must not exceed 99 characters"
+- Invalid date format: `2025-08-11` → "Launch Date must be in DD/MM/YYYY HH:MM:SS or DD/MM/YYYY format"
+- Close Date < Launch Date → "Close Date must be greater than or equal to Launch Date"
+- Duplicate hierarchy levels: `1,1,2` → "Hierarchical Access Level must not contain duplicate values"
+- Geo Fencing without Geo Tagging → "Geo Tagging must be 'Yes' when Geo Fencing is 'Yes'"
+- Invalid Question ID: `Question1` → "Question ID must be in format Q1, Q1.1, Q5.2, etc."
 
 ## Excel Format
 

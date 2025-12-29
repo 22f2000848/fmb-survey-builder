@@ -15,6 +15,12 @@ const Navigation = () => {
           >
             Surveys
           </Link>
+          <Link 
+            to="/validate-upload" 
+            className={location.pathname === '/validate-upload' ? 'nav-link active' : 'nav-link'}
+          >
+            Validate Upload
+          </Link>
         </div>
       </div>
     </nav>

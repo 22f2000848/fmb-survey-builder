@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 import { surveyAPI } from '../services/api';
 import { useValidation } from '../hooks/useValidation';
+import { AVAILABLE_MEDIUMS } from '../schemas/validationConstants';
 
 const SurveyForm = () => {
   const navigate = useNavigate();
@@ -31,6 +34,21 @@ const SurveyForm = () => {
 
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState(null);
+  const [hierarchyInput, setHierarchyInput] = useState('');
+  const [hierarchyLevels, setHierarchyLevels] = useState([]);
+  const [showMediumDropdown, setShowMediumDropdown] = useState(false);
+  const mediumDropdownRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (mediumDropdownRef.current && !mediumDropdownRef.current.contains(event.target)) {
+        setShowMediumDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     if (isEdit) {
@@ -73,16 +91,90 @@ const SurveyForm = () => {
     }
   };
 
-  const handleMediumsChange = (e) => {
-    const options = Array.from(e.target.selectedOptions, option => option.value);
+  const toggleMedium = (medium) => {
+    const currentMediums = Array.isArray(formData.availableMediums) 
+      ? formData.availableMediums 
+      : [];
+    
+    let newMediums;
+    if (currentMediums.includes(medium)) {
+      newMediums = currentMediums.filter(m => m !== medium);
+    } else {
+      newMediums = [...currentMediums, medium];
+    }
+    
     setFormData(prev => ({
       ...prev,
-      availableMediums: options
+      availableMediums: newMediums
+    }));
+    
+    // Clear error
+    if (errors.availableMediums) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.availableMediums;
+        return newErrors;
+      });
+    }
+  };
+
+  const removeMedium = (medium) => {
+    const newMediums = formData.availableMediums.filter(m => m !== medium);
+    setFormData(prev => ({
+      ...prev,
+      availableMediums: newMediums
     }));
   };
 
-  const [hierarchyInput, setHierarchyInput] = useState('');
-  const [hierarchyLevels, setHierarchyLevels] = useState([]);
+  const handleDateChange = (date, field) => {
+    if (date) {
+      // Format to DD/MM/YYYY HH:MM:SS
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      const formatted = `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+      
+      setFormData(prev => ({
+        ...prev,
+        [field]: formatted
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [field]: ''
+      }));
+    }
+    
+    // Clear error
+    if (errors[field]) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
+  };
+
+  // Parse DD/MM/YYYY HH:MM:SS to Date object
+  const parseDate = (dateString) => {
+    if (!dateString) return null;
+    try {
+      const [datePart, timePart] = dateString.split(' ');
+      const [day, month, year] = datePart.split('/').map(Number);
+      
+      if (timePart) {
+        const [hours, minutes, seconds] = timePart.split(':').map(Number);
+        return new Date(year, month - 1, day, hours, minutes, seconds);
+      } else {
+        return new Date(year, month - 1, day);
+      }
+    } catch (e) {
+      return null;
+    }
+  };
 
   const handleAddHierarchyLevel = () => {
     if (hierarchyInput && /^\d+$/.test(hierarchyInput)) {
@@ -222,25 +314,49 @@ const SurveyForm = () => {
           </div>
 
           <div className="form-group">
-            <label htmlFor="availableMediums">Available Mediums (Languages)</label>
-            <select
-              id="availableMediums"
-              multiple
-              value={formData.availableMediums}
-              onChange={handleMediumsChange}
-              size="8"
-              style={{ minHeight: '120px' }}
-            >
-              <option value="English">English</option>
-              <option value="Hindi">Hindi</option>
-              <option value="Gujarati">Gujarati</option>
-              <option value="Marathi">Marathi</option>
-              <option value="Tamil">Tamil</option>
-              <option value="Telugu">Telugu</option>
-              <option value="Bengali">Bengali</option>
-              <option value="Bodo">Bodo</option>
-            </select>
-            <small>Hold Ctrl/Cmd to select multiple languages</small>
+            <label htmlFor="availableMediums">
+              Available Mediums (Languages) <span className="required">*</span>
+            </label>
+            <div className="medium-select-wrapper" ref={mediumDropdownRef}>
+              <input
+                type="text"
+                placeholder="Click to select languages..."
+                value=""
+                onClick={() => setShowMediumDropdown(!showMediumDropdown)}
+                readOnly
+                className={errors.availableMediums ? 'error' : ''}
+                style={{ cursor: 'pointer' }}
+              />
+              {showMediumDropdown && (
+                <div className="medium-dropdown">
+                  {AVAILABLE_MEDIUMS.map(medium => (
+                    <div
+                      key={medium}
+                      className={`medium-option ${formData.availableMediums.includes(medium) ? 'selected' : ''}`}
+                      onClick={() => toggleMedium(medium)}
+                    >
+                      {medium}
+                      {formData.availableMediums.includes(medium) && ' ✓'}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {errors.availableMediums && <span className="error-text">{errors.availableMediums}</span>}
+            <div className="medium-tags-container">
+              {formData.availableMediums && formData.availableMediums.map(medium => (
+                <span key={medium} className="medium-tag">
+                  {medium}
+                  <button 
+                    type="button"
+                    onClick={() => removeMedium(medium)}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+            <small>Select one or more languages for the survey</small>
           </div>
 
           <div className="form-group">
@@ -391,33 +507,38 @@ const SurveyForm = () => {
           
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="launchDate">Launch Date</label>
-              <input
-                type="text"
-                id="launchDate"
-                name="launchDate"
-                value={formData.launchDate}
-                onChange={handleChange}
-                placeholder="DD/MM/YYYY HH:MM:SS"
+              <label htmlFor="launchDate">Launch Date (Start Date)</label>
+              <DatePicker
+                selected={parseDate(formData.launchDate)}
+                onChange={(date) => handleDateChange(date, 'launchDate')}
+                showTimeSelect
+                timeFormat="HH:mm:ss"
+                timeIntervals={15}
+                dateFormat="dd/MM/yyyy HH:mm:ss"
+                placeholderText="Select launch date and time"
                 className={errors.launchDate ? 'error' : ''}
+                isClearable
               />
               {errors.launchDate && <span className="error-text">{errors.launchDate}</span>}
               <small>Format: DD/MM/YYYY HH:MM:SS (e.g., 28/01/2025 00:00:00)</small>
             </div>
 
             <div className="form-group">
-              <label htmlFor="closeDate">Close Date</label>
-              <input
-                type="text"
-                id="closeDate"
-                name="closeDate"
-                value={formData.closeDate}
-                onChange={handleChange}
-                placeholder="DD/MM/YYYY HH:MM:SS"
+              <label htmlFor="closeDate">Close Date (End Date)</label>
+              <DatePicker
+                selected={parseDate(formData.closeDate)}
+                onChange={(date) => handleDateChange(date, 'closeDate')}
+                showTimeSelect
+                timeFormat="HH:mm:ss"
+                timeIntervals={15}
+                dateFormat="dd/MM/yyyy HH:mm:ss"
+                placeholderText="Select close date and time"
                 className={errors.closeDate ? 'error' : ''}
+                minDate={parseDate(formData.launchDate)}
+                isClearable
               />
               {errors.closeDate && <span className="error-text">{errors.closeDate}</span>}
-              <small>Format: DD/MM/YYYY HH:MM:SS (e.g., 31/03/2025 23:59:00)</small>
+              <small>Format: DD/MM/YYYY HH:MM:SS (must be ≥ Launch Date)</small>
             </div>
           </div>
         </div>
@@ -491,7 +612,16 @@ const SurveyForm = () => {
           <button 
             type="submit" 
             className="btn btn-primary"
-            disabled={loading || !formData.surveyId || !formData.surveyName || !formData.surveyDescription}
+            disabled={
+              loading || 
+              !formData.surveyId || 
+              !formData.surveyName || 
+              !formData.surveyDescription ||
+              !formData.availableMediums || 
+              formData.availableMediums.length === 0 ||
+              !formData.hierarchicalAccessLevel ||
+              Object.keys(errors).length > 0
+            }
           >
             {loading ? 'Saving...' : (isEdit ? 'Update Survey' : 'Create Survey')}
           </button>

@@ -5,6 +5,7 @@ import SurveyList from './components/SurveyList';
 import SurveyForm from './components/SurveyForm';
 import QuestionList from './components/QuestionList';
 import QuestionForm from './components/QuestionForm';
+import UploadValidator from './components/UploadValidator';
 import './App.css';
 
 function App() {
@@ -20,6 +21,7 @@ function App() {
             <Route path="/surveys/:surveyId/questions" element={<QuestionList />} />
             <Route path="/surveys/:surveyId/questions/new" element={<QuestionForm />} />
             <Route path="/surveys/:surveyId/questions/:questionId/edit" element={<QuestionForm />} />
+            <Route path="/validate-upload" element={<UploadValidator />} />
           </Routes>
         </main>
       </div>
