@@ -82,3 +82,24 @@ export const exportAPI = {
     return true;
   }
 };
+
+// Validation API calls
+export const validationAPI = {
+  // Validate uploaded file
+  validateUpload: async (file, schema) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await axios.post(
+      `${API_BASE_URL}/validate-upload?schema=${schema}`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data;
+  },
+
+  // Get validation schema
+  getSchema: async () => {
+    const response = await axios.get(`${API_BASE_URL}/validation-schema`);
+    return response.data;
+  }
+};

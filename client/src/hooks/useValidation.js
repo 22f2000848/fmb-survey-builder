@@ -1,4 +1,12 @@
 import { useState } from 'react';
+import {
+  AVAILABLE_MEDIUMS,
+  YES_NO_VALUES,
+  MODES,
+  PATTERNS,
+  CONSTRAINTS,
+  MESSAGES
+} from '../schemas/validationConstants';
 
 export const useValidation = () => {
   const [errors, setErrors] = useState({});
@@ -8,40 +16,106 @@ export const useValidation = () => {
 
     // Survey ID validation
     if (!surveyData.surveyId || surveyData.surveyId.trim() === '') {
-      newErrors.surveyId = 'Survey ID is required';
-    } else if (!/^[A-Za-z0-9_]+$/.test(surveyData.surveyId)) {
+      newErrors.surveyId = MESSAGES.REQUIRED('Survey ID');
+    } else if (!PATTERNS.SURVEY_ID.test(surveyData.surveyId)) {
       newErrors.surveyId = 'Survey ID must contain only alphanumeric characters and underscores (no spaces)';
     }
     
     // Survey Name validation
     if (!surveyData.surveyName || surveyData.surveyName.trim() === '') {
-      newErrors.surveyName = 'Survey Name is required';
-    } else if (surveyData.surveyName.length > 99) {
-      newErrors.surveyName = 'Survey Name must not exceed 99 characters';
+      newErrors.surveyName = MESSAGES.REQUIRED('Survey Name');
+    } else if (surveyData.surveyName.length > CONSTRAINTS.SURVEY_NAME_MAX) {
+      newErrors.surveyName = MESSAGES.MAX_LENGTH('Survey Name', CONSTRAINTS.SURVEY_NAME_MAX);
     }
     
     // Survey Description validation
     if (!surveyData.surveyDescription || surveyData.surveyDescription.trim() === '') {
-      newErrors.surveyDescription = 'Survey Description is required';
-    } else if (surveyData.surveyDescription.length > 256) {
-      newErrors.surveyDescription = 'Survey Description must not exceed 256 characters';
+      newErrors.surveyDescription = MESSAGES.REQUIRED('Survey Description');
+    } else if (surveyData.surveyDescription.length > CONSTRAINTS.SURVEY_DESCRIPTION_MAX) {
+      newErrors.surveyDescription = MESSAGES.MAX_LENGTH('Survey Description', CONSTRAINTS.SURVEY_DESCRIPTION_MAX);
     }
 
-    // Validate date format
+    // Available Mediums validation
+    if (!surveyData.availableMediums || surveyData.availableMediums.length === 0) {
+      newErrors.availableMediums = MESSAGES.REQUIRED('Available Mediums');
+    } else {
+      const mediums = Array.isArray(surveyData.availableMediums) 
+        ? surveyData.availableMediums 
+        : surveyData.availableMediums.split(',').map(m => m.trim());
+      
+      for (const medium of mediums) {
+        if (!AVAILABLE_MEDIUMS.includes(medium)) {
+          newErrors.availableMediums = MESSAGES.ENUM_MISMATCH('Available Mediums', AVAILABLE_MEDIUMS);
+          break;
+        }
+      }
+    }
+
+    // Hierarchical Access Level validation
+    if (!surveyData.hierarchicalAccessLevel || surveyData.hierarchicalAccessLevel.trim() === '') {
+      newErrors.hierarchicalAccessLevel = MESSAGES.REQUIRED('Hierarchical Access Level');
+    } else {
+      const levels = surveyData.hierarchicalAccessLevel.split(',').map(l => l.trim()).filter(l => l);
+      
+      // Check all are numeric
+      for (const level of levels) {
+        if (!/^\d+$/.test(level)) {
+          newErrors.hierarchicalAccessLevel = MESSAGES.HIERARCHY_NUMERIC;
+          break;
+        }
+        const num = parseInt(level);
+        if (num < CONSTRAINTS.HIERARCHY_LEVEL_MIN || num > CONSTRAINTS.HIERARCHY_LEVEL_MAX) {
+          newErrors.hierarchicalAccessLevel = `Hierarchical Access Level values must be between ${CONSTRAINTS.HIERARCHY_LEVEL_MIN} and ${CONSTRAINTS.HIERARCHY_LEVEL_MAX}`;
+          break;
+        }
+      }
+
+      // Check for duplicates
+      if (!newErrors.hierarchicalAccessLevel) {
+        const uniqueLevels = [...new Set(levels)];
+        if (uniqueLevels.length !== levels.length) {
+          newErrors.hierarchicalAccessLevel = MESSAGES.HIERARCHY_DUPLICATE;
+        }
+      }
+    }
+
+    // Yes/No fields validation
+    const yesNoFields = [
+      'public', 'inSchool', 'acceptMultipleEntries', 'isActive', 
+      'downloadResponse', 'geoFencing', 'geoTagging', 'testSurvey', 'visibleOnReportBot'
+    ];
+    
+    yesNoFields.forEach(field => {
+      if (surveyData[field] && !YES_NO_VALUES.includes(surveyData[field])) {
+        newErrors[field] = `${field} must be "Yes" or "No"`;
+      }
+    });
+
+    // Mode validation
+    if (surveyData.mode && !MODES.includes(surveyData.mode)) {
+      newErrors.mode = MESSAGES.ENUM_MISMATCH('Mode', MODES);
+    }
+
+    // Geo Fencing/Tagging cross-validation
+    if (surveyData.geoFencing === 'Yes' && surveyData.geoTagging !== 'Yes') {
+      newErrors.geoTagging = MESSAGES.GEO_FENCING_TAGGING;
+    }
+
+    // Date format validation
     if (surveyData.launchDate && !isValidDateFormat(surveyData.launchDate)) {
-      newErrors.launchDate = 'Launch Date must be in DD/MM/YYYY HH:MM:SS format';
+      newErrors.launchDate = MESSAGES.DATE_INVALID;
     }
     if (surveyData.closeDate && !isValidDateFormat(surveyData.closeDate)) {
-      newErrors.closeDate = 'Close Date must be in DD/MM/YYYY HH:MM:SS format';
+      newErrors.closeDate = MESSAGES.DATE_INVALID;
     }
     
-    // Validate Close Date >= Launch Date
+    // Date comparison: Close Date >= Launch Date
     if (surveyData.launchDate && surveyData.closeDate && 
         isValidDateFormat(surveyData.launchDate) && isValidDateFormat(surveyData.closeDate)) {
       const launchDate = parseDateString(surveyData.launchDate);
       const closeDate = parseDateString(surveyData.closeDate);
       if (closeDate < launchDate) {
-        newErrors.closeDate = 'Close Date must be greater than or equal to Launch Date';
+        newErrors.closeDate = MESSAGES.DATE_COMPARE;
       }
     }
 
@@ -53,10 +127,15 @@ export const useValidation = () => {
     const newErrors = {};
 
     if (!questionData.questionId || questionData.questionId.trim() === '') {
-      newErrors.questionId = 'Question ID is required';
+      newErrors.questionId = MESSAGES.REQUIRED('Question ID');
+    } else if (!PATTERNS.QUESTION_ID.test(questionData.questionId)) {
+      newErrors.questionId = 'Question ID must be in format Q1, Q1.1, Q5.2, etc.';
     }
+    
     if (!questionData.questionDescription || questionData.questionDescription.trim() === '') {
-      newErrors.questionDescription = 'Question Description is required';
+      newErrors.questionDescription = MESSAGES.REQUIRED('Question Description');
+    } else if (questionData.questionDescription.length > CONSTRAINTS.QUESTION_DESCRIPTION_MAX) {
+      newErrors.questionDescription = MESSAGES.MAX_LENGTH('Question Description', CONSTRAINTS.QUESTION_DESCRIPTION_MAX);
     }
 
     // Validate based on question type
@@ -85,6 +164,8 @@ export const useValidation = () => {
     if (multipleChoiceTypes.includes(questionType)) {
       if (!questionData.options || questionData.options.length === 0) {
         newErrors.options = 'At least one option is required';
+      } else if (questionData.options.length > CONSTRAINTS.OPTION_MAX) {
+        newErrors.options = `Maximum ${CONSTRAINTS.OPTION_MAX} options allowed`;
       }
     }
 
@@ -93,21 +174,25 @@ export const useValidation = () => {
   };
 
   const isValidDateFormat = (dateString) => {
-    const regex = /^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}$/;
-    return regex.test(dateString);
+    if (!dateString) return false;
+    return PATTERNS.DATE_FORMAT.test(dateString);
   };
 
   const parseDateString = (dateString) => {
-    // Parse DD/MM/YYYY HH:MM:SS format
+    // Parse DD/MM/YYYY HH:MM:SS or DD/MM/YYYY format
     const [datePart, timePart] = dateString.split(' ');
     const [day, month, year] = datePart.split('/').map(Number);
-    const [hours, minutes, seconds] = timePart.split(':').map(Number);
-    return new Date(year, month - 1, day, hours, minutes, seconds);
+    
+    if (timePart) {
+      const [hours, minutes, seconds] = timePart.split(':').map(Number);
+      return new Date(year, month - 1, day, hours, minutes, seconds);
+    } else {
+      return new Date(year, month - 1, day);
+    }
   };
 
   const validateTableQuestionFormat = (value) => {
-    const regex = /^[a-z]:.+(\n[a-z]:.+)*$/;
-    return regex.test(value);
+    return PATTERNS.TABLE_QUESTION_FORMAT.test(value);
   };
 
   const clearErrors = () => {
