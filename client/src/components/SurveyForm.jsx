@@ -141,10 +141,10 @@ const SurveyForm = () => {
         minutes = '00';
         seconds = '00';
       } else if (field === 'closeDate') {
-        // Close Date: auto set to 23:59:00
+        // Close Date: auto set to 23:59:59
         hours = '23';
         minutes = '59';
-        seconds = '00';
+        seconds = '59';
       } else {
         // For any other date field, use current time
         hours = String(date.getHours()).padStart(2, '0');

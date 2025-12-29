@@ -121,7 +121,7 @@ router.post('/', upload.single('file'), async (req, res) => {
         const surveyErrors = validationEngine.validateBulkSurveys(surveyData);
         // Update errors with Excel row numbers if available
         surveyErrors.forEach(error => {
-          const record = surveyData[error.row - 2]; // error.row is already +2 from array index
+          const record = surveyData[error.row - 2]; // error.row is index + 2, so we get index back
           if (record && record._excelRow) {
             error.row = record._excelRow; // Use actual Excel row number
           }
@@ -139,7 +139,7 @@ router.post('/', upload.single('file'), async (req, res) => {
         const questionErrors = validationEngine.validateBulkQuestions(questionData, store.surveys);
         // Update errors with Excel row numbers if available
         questionErrors.forEach(error => {
-          const record = questionData[error.row - 2]; // error.row is already +2 from array index
+          const record = questionData[error.row - 2]; // error.row is index + 2, so we get index back
           if (record && record._excelRow) {
             error.row = record._excelRow; // Use actual Excel row number
           }
