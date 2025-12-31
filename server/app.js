@@ -7,6 +7,7 @@ const surveysRouter = require('./routes/surveys');
 const exportRouter = require('./routes/export');
 const validateUploadRouter = require('./routes/validateUpload');
 const validationSchemaRouter = require('./routes/validationSchema');
+const importRouter = require('./routes/import');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -21,6 +22,7 @@ app.use('/api/surveys', surveysRouter);
 app.use('/api/export', exportRouter);
 app.use('/api/validate-upload', validateUploadRouter);
 app.use('/api/validation-schema', validationSchemaRouter);
+app.use('/api/import', importRouter);
 
 // Health check
 app.get('/api/health', (req, res) => {

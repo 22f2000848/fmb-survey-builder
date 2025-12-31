@@ -16,6 +16,12 @@ const Navigation = () => {
             Surveys
           </Link>
           <Link 
+            to="/import" 
+            className={location.pathname === '/import' ? 'nav-link active' : 'nav-link'}
+          >
+            Import
+          </Link>
+          <Link 
             to="/validate-upload" 
             className={location.pathname === '/validate-upload' ? 'nav-link active' : 'nav-link'}
           >

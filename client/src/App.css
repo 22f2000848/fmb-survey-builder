@@ -1768,3 +1768,70 @@ body {
   }
 }
 
+/* Import Survey Styles */
+.import-survey-container {
+  animation: fadeIn 0.3s;
+}
+
+.import-instructions {
+  background-color: #e3f2fd;
+  border-left: 4px solid #3498db;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  border-radius: 4px;
+}
+
+.import-instructions h3 {
+  color: #2c3e50;
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+}
+
+.import-instructions ul {
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+.import-instructions li {
+  color: #555;
+  line-height: 1.8;
+  margin-bottom: 0.5rem;
+}
+
+.import-success {
+  background-color: #e8f5e9;
+  border-left: 4px solid #27ae60;
+  padding: 1.5rem;
+  margin-top: 2rem;
+  border-radius: 4px;
+}
+
+.import-success h3 {
+  color: #27ae60;
+  margin-bottom: 1rem;
+}
+
+.import-success p {
+  color: #2c3e50;
+  margin: 0.5rem 0;
+}
+
+.import-errors {
+  background-color: #fee;
+  border-left: 4px solid #e74c3c;
+  padding: 1.5rem;
+  margin-top: 2rem;
+  border-radius: 4px;
+}
+
+.import-errors h3 {
+  color: #e74c3c;
+  margin-bottom: 1rem;
+}
+
+.error-summary {
+  color: #555;
+  font-weight: 500;
+  margin-bottom: 1rem;
+}
+

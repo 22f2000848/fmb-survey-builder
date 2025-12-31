@@ -7,6 +7,7 @@ import QuestionList from './components/QuestionList';
 import QuestionForm from './components/QuestionForm';
 import UploadValidator from './components/UploadValidator';
 import SurveyPreview from './components/preview/SurveyPreview';
+import ImportSurvey from './components/ImportSurvey';
 import './App.css';
 
 function App() {
@@ -23,6 +24,7 @@ function App() {
             <Route path="/surveys/:surveyId/questions/new" element={<QuestionForm />} />
             <Route path="/surveys/:surveyId/questions/:questionId/edit" element={<QuestionForm />} />
             <Route path="/surveys/:surveyId/preview" element={<SurveyPreview />} />
+            <Route path="/import" element={<ImportSurvey />} />
             <Route path="/validate-upload" element={<UploadValidator />} />
           </Routes>
         </main>

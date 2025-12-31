@@ -89,12 +89,20 @@ const SurveyList = () => {
 
       <div className="list-header">
         <h2>Surveys</h2>
-        <button 
-          className="btn btn-primary"
-          onClick={() => navigate('/surveys/new')}
-        >
-          ✚ Create New Survey
-        </button>
+        <div className="header-actions">
+          <button 
+            className="btn btn-secondary"
+            onClick={() => navigate('/import')}
+          >
+            📥 Import Survey
+          </button>
+          <button 
+            className="btn btn-primary"
+            onClick={() => navigate('/surveys/new')}
+          >
+            ✚ Create New Survey
+          </button>
+        </div>
       </div>
 
       {error && <div className="error-message">{error}</div>}
