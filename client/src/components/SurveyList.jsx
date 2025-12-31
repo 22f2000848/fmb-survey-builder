@@ -113,6 +113,12 @@ const SurveyList = () => {
                 </button>
                 <button 
                   className="btn btn-secondary btn-sm"
+                  onClick={() => navigate(`/surveys/${survey.surveyId}/preview`)}
+                >
+                  Preview
+                </button>
+                <button 
+                  className="btn btn-secondary btn-sm"
                   onClick={() => navigate(`/surveys/${survey.surveyId}/edit`)}
                 >
                   Edit

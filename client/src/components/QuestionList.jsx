@@ -96,6 +96,13 @@ const QuestionList = () => {
             Back to Surveys
           </button>
           <button 
+            className="btn btn-secondary"
+            onClick={() => navigate(`/surveys/${surveyId}/preview`)}
+            disabled={questions.length === 0}
+          >
+            Preview Survey
+          </button>
+          <button 
             className="btn btn-success"
             onClick={handleExport}
             disabled={exporting}
