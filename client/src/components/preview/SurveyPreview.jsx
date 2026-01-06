@@ -40,16 +40,25 @@ const SurveyPreview = () => {
   };
 
   const sortQuestions = (list) => {
+    const parseSegments = (questionId) => {
+      const cleaned = String(questionId || '').replace(/^Q/i, '');
+      return cleaned.split('.').map((part) => Number.parseInt(part, 10)).filter((num) => !Number.isNaN(num));
+    };
+
     return [...list].sort((a, b) => {
-      const aIsChild = a.questionId?.includes('.');
-      const bIsChild = b.questionId?.includes('.');
+      const aParts = parseSegments(a.questionId);
+      const bParts = parseSegments(b.questionId);
+      const maxLen = Math.max(aParts.length, bParts.length);
 
-      if (aIsChild && !bIsChild) return 1;
-      if (!aIsChild && bIsChild) return -1;
+      for (let i = 0; i < maxLen; i += 1) {
+        const aVal = aParts[i];
+        const bVal = bParts[i];
+        if (aVal === undefined) return -1;
+        if (bVal === undefined) return 1;
+        if (aVal !== bVal) return aVal - bVal;
+      }
 
-      const aNum = parseFloat(String(a.questionId || '').replace('Q', ''));
-      const bNum = parseFloat(String(b.questionId || '').replace('Q', ''));
-      return aNum - bNum;
+      return 0;
     });
   };
 
