@@ -219,7 +219,7 @@ router.post('/:id/questions', async (req, res) => {
     }
     
     // Validate question data
-    const validation = validator.validateQuestion(questionData, store.questions);
+    const validation = validator.validateQuestion(questionData, store.surveys, store.questions);
     if (!validation.isValid) {
       return res.status(400).json({ 
         error: 'Validation failed',
@@ -257,7 +257,7 @@ router.put('/:id/questions/:questionId', async (req, res) => {
     
     // Validate question data
     const store = await readStore();
-    const validation = validator.validateQuestion(questionData, store.questions);
+    const validation = validator.validateQuestion(questionData, store.surveys, store.questions);
     if (!validation.isValid) {
       return res.status(400).json({ 
         error: 'Validation failed',
@@ -417,7 +417,7 @@ router.post('/:surveyId/questions/:questionId/duplicate', async (req, res) => {
     }
     
     // Validate duplicated question
-    const validation = validator.validateQuestion(duplicatedQuestion, store.questions);
+    const validation = validator.validateQuestion(duplicatedQuestion, store.surveys, store.questions);
     if (!validation.isValid) {
       return res.status(400).json({ errors: validation.errors });
     }

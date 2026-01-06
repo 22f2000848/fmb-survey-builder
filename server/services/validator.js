@@ -26,10 +26,9 @@ class Validator {
   }
 
   // Validate question data
-  validateQuestion(questionData, existingQuestions = []) {
+  validateQuestion(questionData, surveys = [], existingQuestions = []) {
     // Use the comprehensive validation engine
-    // Note: We don't have surveys array here, will validate in route
-    const validation = validationEngine.validateQuestion(questionData, [], existingQuestions);
+    const validation = validationEngine.validateQuestion(questionData, surveys, existingQuestions);
     
     // Convert error format to match existing API
     const errors = validation.errors.map(err => err.message);

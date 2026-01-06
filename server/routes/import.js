@@ -36,7 +36,7 @@ async function parseXLSX(filePath) {
   if (surveySheet) {
     const headers = [];
     surveySheet.getRow(1).eachCell((cell, colNumber) => {
-      headers[colNumber] = cell.value;
+      headers[colNumber] = normalizeCellValue(cell.value);
     });
     
     surveySheet.eachRow((row, rowNumber) => {
@@ -48,7 +48,7 @@ async function parseXLSX(filePath) {
         if (header) {
           // Map column names to field names
           const fieldName = mapSurveyColumnToField(header);
-          survey[fieldName] = cell.value;
+          survey[fieldName] = normalizeCellValue(cell.value);
         }
       });
       
@@ -63,7 +63,7 @@ async function parseXLSX(filePath) {
   if (questionSheet) {
     const headers = [];
     questionSheet.getRow(1).eachCell((cell, colNumber) => {
-      headers[colNumber] = cell.value;
+      headers[colNumber] = normalizeCellValue(cell.value);
     });
     
     const questionsByKey = {};
@@ -76,7 +76,7 @@ async function parseXLSX(filePath) {
         const header = headers[colNumber];
         if (header) {
           const fieldName = mapQuestionColumnToField(header);
-          questionRow[fieldName] = cell.value;
+          questionRow[fieldName] = normalizeCellValue(cell.value);
         }
       });
       
@@ -105,16 +105,18 @@ async function parseXLSX(filePath) {
         }
         
         // Add translation for this language
-        const language = questionRow.medium || questionRow.mediumInEnglish || 'English';
+        const language = questionRow.mediumInEnglish || questionRow.medium || 'English';
         questionsByKey[key].translations[language] = {
           questionDescription: questionRow.questionDescription || '',
           questionDescriptionOptional: questionRow.questionDescriptionOptional || '',
+          tableHeaderValue: questionRow.tableHeaderValue || '',
+          tableQuestionValue: questionRow.tableQuestionValue || '',
           options: parseOptions(questionRow)
         };
       }
     });
     
-    result.questions = Object.values(questionsByKey);
+    result.questions = Object.values(questionsByKey).map(applyPrimaryTranslation);
   }
   
   return result;
@@ -128,10 +130,12 @@ async function parseCSV(filePath, sheetType) {
     skip_empty_lines: true,
     trim: true
   });
-  
-  if (sheetType === 'survey') {
+
+  const inferredType = inferSheetType(records, sheetType);
+
+  if (inferredType === 'survey') {
     return { surveys: records.map(mapSurveyRecord), questions: [] };
-  } else if (sheetType === 'question') {
+  } else if (inferredType === 'question') {
     // Group questions by key
     const questionsByKey = {};
     
@@ -161,16 +165,18 @@ async function parseCSV(filePath, sheetType) {
           };
         }
         
-        const language = questionRow.medium || questionRow.mediumInEnglish || 'English';
+        const language = questionRow.mediumInEnglish || questionRow.medium || 'English';
         questionsByKey[key].translations[language] = {
           questionDescription: questionRow.questionDescription || '',
           questionDescriptionOptional: questionRow.questionDescriptionOptional || '',
+          tableHeaderValue: questionRow.tableHeaderValue || '',
+          tableQuestionValue: questionRow.tableQuestionValue || '',
           options: parseOptions(questionRow)
         };
       }
     });
     
-    return { surveys: [], questions: Object.values(questionsByKey) };
+    return { surveys: [], questions: Object.values(questionsByKey).map(applyPrimaryTranslation) };
   }
   
   return { surveys: [], questions: [] };
@@ -178,52 +184,72 @@ async function parseCSV(filePath, sheetType) {
 
 // Map Survey column names to field names
 function mapSurveyColumnToField(columnName) {
+  const normalized = normalizeHeaderKey(columnName);
   const mapping = {
-    'Survey ID': 'surveyId',
-    'Survey Name': 'surveyName',
-    'Survey Description': 'surveyDescription',
-    'available_mediums': 'availableMediums',
-    'Hierarchical Access Level': 'hierarchicalAccessLevel',
-    'Public': 'public',
-    'In School': 'inSchool',
-    'Accept multiple Entries': 'acceptMultipleEntries',
-    'Launch Date': 'launchDate',
-    'Close Date': 'closeDate',
-    'Mode': 'mode',
-    'visible_on_report_bot': 'visibleOnReportBot',
-    'Is Active?': 'isActive',
-    'Download_response': 'downloadResponse',
-    'Geo Fencing': 'geoFencing',
-    'Geo Tagging': 'geoTagging',
-    'Test Survey': 'testSurvey'
+    surveyid: 'surveyId',
+    surveyname: 'surveyName',
+    surveydescription: 'surveyDescription',
+    availablemediums: 'availableMediums',
+    hierarchicalaccesslevel: 'hierarchicalAccessLevel',
+    public: 'public',
+    inschool: 'inSchool',
+    acceptmultipleentries: 'acceptMultipleEntries',
+    launchdate: 'launchDate',
+    closedate: 'closeDate',
+    mode: 'mode',
+    visibleonreportbot: 'visibleOnReportBot',
+    isactive: 'isActive',
+    downloadresponse: 'downloadResponse',
+    geofencing: 'geoFencing',
+    geotagging: 'geoTagging',
+    testsurvey: 'testSurvey'
   };
-  return mapping[columnName] || columnName;
+  return mapping[normalized] || columnName;
 }
 
 // Map Question column names to field names
 function mapQuestionColumnToField(columnName) {
+  const normalized = normalizeHeaderKey(columnName);
+  const optionMatch = normalized.match(/^option(\d+)(inenglish|children)?$/);
+  if (optionMatch) {
+    const index = optionMatch[1];
+    const suffix = optionMatch[2];
+    if (suffix === 'inenglish') {
+      return `option${index}InEnglish`;
+    }
+    if (suffix === 'children') {
+      return `option${index}Children`;
+    }
+    return `option${index}`;
+  }
+
   const mapping = {
-    'Survey ID': 'surveyId',
-    'Medium': 'medium',
-    'Medium_in_english': 'mediumInEnglish',
-    'Question_ID': 'questionId',
-    'Question Type': 'questionType',
-    'IsDynamic': 'isDynamic',
-    'Question_Description_Optional': 'questionDescriptionOptional',
-    'Max_Value': 'maxValue',
-    'Min_Value': 'minValue',
-    'Is Mandatory': 'isMandatory',
-    'Table_Header_value': 'tableHeaderValue',
-    'Table_Question_value': 'tableQuestionValue',
-    'Source_Question': 'sourceQuestion',
-    'Text_input_type': 'textInputType',
-    'text_limit_characters': 'textLimitCharacters',
-    'Mode': 'mode',
-    'Question_Media_Link': 'questionMediaLink',
-    'Question_Media_Type': 'questionMediaType',
-    'Question Description': 'questionDescription'
+    surveyid: 'surveyId',
+    medium: 'medium',
+    mediuminenglish: 'mediumInEnglish',
+    questionid: 'questionId',
+    questiontype: 'questionType',
+    isdynamic: 'isDynamic',
+    questiondescriptionoptional: 'questionDescriptionOptional',
+    maxvalue: 'maxValue',
+    minvalue: 'minValue',
+    ismandatory: 'isMandatory',
+    tableheadervalue: 'tableHeaderValue',
+    tablequestionvalue: 'tableQuestionValue',
+    sourcequestion: 'sourceQuestion',
+    textinputtype: 'textInputType',
+    textlimitcharacters: 'textLimitCharacters',
+    mode: 'mode',
+    questionmedialink: 'questionMediaLink',
+    questionmediatype: 'questionMediaType',
+    questiondescription: 'questionDescription'
   };
-  return mapping[columnName] || columnName;
+
+  if (normalized.startsWith('questiondescription') && normalized !== 'questiondescriptionoptional') {
+    return 'questionDescription';
+  }
+
+  return mapping[normalized] || columnName;
 }
 
 function mapSurveyRecord(record) {
@@ -244,13 +270,91 @@ function mapQuestionRecord(record) {
   return question;
 }
 
+function normalizeCellValue(value) {
+  if (value === null || value === undefined) return value;
+
+  if (value instanceof Date) {
+    const day = String(value.getDate()).padStart(2, '0');
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const year = value.getFullYear();
+    return `${day}/${month}/${year}`;
+  }
+
+  if (typeof value === 'string') {
+    return value.trim();
+  }
+
+  if (typeof value === 'object') {
+    if (value.text) return value.text;
+    if (value.richText) {
+      return value.richText.map((part) => part.text).join('');
+    }
+    if (value.result !== undefined) return value.result;
+    if (value.formula && value.result !== undefined) return value.result;
+    if (value.hyperlink) return value.text || value.hyperlink;
+  }
+
+  return value;
+}
+
+function normalizeHeaderKey(value) {
+  if (value === null || value === undefined) return '';
+  return String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function inferSheetType(records, sheetType) {
+  if (sheetType === 'survey' || sheetType === 'question') {
+    return sheetType;
+  }
+
+  if (!records || records.length === 0) {
+    return null;
+  }
+
+  const sample = records[0];
+  const keys = Object.keys(sample);
+  const normalizedKeys = new Set(keys.map((key) => normalizeHeaderKey(key)));
+  const hasSurveyId = normalizedKeys.has('surveyid');
+  const hasQuestionId = normalizedKeys.has('questionid');
+
+  if (hasQuestionId) {
+    return 'question';
+  }
+  if (hasSurveyId) {
+    return 'survey';
+  }
+
+  return null;
+}
+
+function applyPrimaryTranslation(question) {
+  const translations = question.translations || {};
+  const languages = Object.keys(translations);
+  const primaryLanguage = languages.includes('English') ? 'English' : (languages[0] || 'English');
+  const primaryTranslation = translations[primaryLanguage] || {};
+
+  return {
+    ...question,
+    medium: question.medium || primaryLanguage,
+    questionDescription: primaryTranslation.questionDescription || question.questionDescription || '',
+    questionDescriptionOptional: primaryTranslation.questionDescriptionOptional || question.questionDescriptionOptional || '',
+    tableHeaderValue: primaryTranslation.tableHeaderValue || question.tableHeaderValue || '',
+    tableQuestionValue: primaryTranslation.tableQuestionValue || question.tableQuestionValue || '',
+    options: primaryTranslation.options || question.options || []
+  };
+}
+
 // Parse options from question row
 function parseOptions(questionRow) {
   const options = [];
   
   for (let i = 1; i <= 20; i++) {
     const optionKey = `option${i}`;
-    const optionText = questionRow[optionKey] || questionRow[`Option_${i}`];
+    const optionText = normalizeCellValue(questionRow[optionKey]) || normalizeCellValue(questionRow[`Option_${i}`]);
     
     if (optionText) {
       const optionInEnglishKey = `option${i}InEnglish`;
@@ -258,8 +362,8 @@ function parseOptions(questionRow) {
       
       options.push({
         text: optionText,
-        textInEnglish: questionRow[optionInEnglishKey] || questionRow[`Option_${i}_in_English`] || optionText,
-        children: questionRow[optionChildrenKey] || questionRow[`Option_${i}Children`] || ''
+        textInEnglish: normalizeCellValue(questionRow[optionInEnglishKey]) || normalizeCellValue(questionRow[`Option_${i}_in_English`]) || optionText,
+        children: normalizeCellValue(questionRow[optionChildrenKey]) || normalizeCellValue(questionRow[`Option_${i}Children`]) || ''
       });
     }
   }
@@ -290,9 +394,25 @@ router.post('/', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'Unsupported file format. Please upload XLSX or CSV file.' });
     }
     
+    if (fileExt === '.csv' && importData.surveys.length === 0 && importData.questions.length === 0) {
+      return res.status(400).json({
+        error: 'Could not detect CSV type. Please upload a Survey Master or Question Master CSV.'
+      });
+    }
+
     // Validate imported data
     const errors = [];
     const store = await readStore();
+
+    // Allow re-import by removing existing surveys with matching IDs
+    if (importData.surveys.length > 0) {
+      const incomingSurveyIds = new Set(importData.surveys.map((survey) => survey.surveyId));
+      store.surveys = store.surveys.filter((survey) => !incomingSurveyIds.has(survey.surveyId));
+      store.questions = store.questions.filter((question) => !incomingSurveyIds.has(question.surveyId));
+    }
+
+    const surveysForValidation = [...store.surveys, ...importData.surveys];
+    const questionsForValidation = [...store.questions, ...importData.questions];
     
     // Validate surveys
     importData.surveys.forEach((survey, index) => {
@@ -319,7 +439,7 @@ router.post('/', upload.single('file'), async (req, res) => {
     
     // Validate questions
     importData.questions.forEach((question, index) => {
-      const validation = validator.validateQuestion(question, store.questions);
+      const validation = validator.validateQuestion(question, surveysForValidation, questionsForValidation);
       if (!validation.isValid) {
         errors.push({
           type: 'question',
