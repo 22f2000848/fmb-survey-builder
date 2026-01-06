@@ -438,7 +438,7 @@ Each question type has specific field requirements and auto-configuration:
 
 5. **Date Format**: Using DD/MM/YYYY HH:MM:SS format as specified. No timezone handling implemented.
 
-6. **Excel Format**: Generated Excel files match the exact column order and naming from specifications. All 84 columns in Question Master sheet are included.
+6. **Excel Format**: Generated Excel files match the exact column order and naming from specifications.
 
 7. **Child Questions**: Parent questions must be created before child questions. The UI sorts questions to show parents first.
 
