@@ -4,7 +4,6 @@ const multer = require('multer');
 const { parse } = require('csv-parse/sync');
 const ExcelJS = require('exceljs');
 const validationEngine = require('../validation/validationEngine');
-const fs = require('fs').promises;
 const path = require('path');
 
 // Configure multer for file uploads
@@ -22,18 +21,6 @@ const upload = multer({
     }
   }
 });
-
-const STORE_PATH = path.join(__dirname, '../data/store.json');
-
-// Read store to get existing surveys for cross-validation
-async function readStore() {
-  try {
-    const data = await fs.readFile(STORE_PATH, 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    return { surveys: [], questions: [] };
-  }
-}
 
 /**
  * POST /api/validate-upload
@@ -108,9 +95,6 @@ router.post('/', upload.single('file'), async (req, res) => {
       // These sheets will not be processed or validated
     }
 
-    // Get existing data for cross-validation
-    const store = await readStore();
-    
     // Validate based on schema parameter
     let allErrors = [];
     let totalRows = 0;
@@ -128,6 +112,10 @@ router.post('/', upload.single('file'), async (req, res) => {
           if (record && record._sheetName) {
             error.sheet = record._sheetName; // Use actual sheet name
           }
+          if (record) {
+            error.surveyId = record.surveyId || '';
+            error.surveyName = record.surveyName || '';
+          }
         });
         allErrors = allErrors.concat(surveyErrors);
       }
@@ -136,7 +124,7 @@ router.post('/', upload.single('file'), async (req, res) => {
     if (schema === 'question' || schema === 'both') {
       if (questionData.length > 0) {
         totalRows += questionData.length;
-        const questionErrors = validationEngine.validateBulkQuestions(questionData, store.surveys);
+        const questionErrors = validationEngine.validateBulkQuestions(questionData, surveyData);
         // Update errors with Excel row numbers if available
         questionErrors.forEach(error => {
           const record = questionData[error.row - 2]; // error.row is index + 2, so we get index back
@@ -145,6 +133,12 @@ router.post('/', upload.single('file'), async (req, res) => {
           }
           if (record && record._sheetName) {
             error.sheet = record._sheetName; // Use actual sheet name
+          }
+          if (record) {
+            error.surveyId = record.surveyId || '';
+            error.questionId = record.questionId || '';
+            error.questionType = record.questionType || '';
+            error.medium = record.medium || '';
           }
         });
         allErrors = allErrors.concat(questionErrors);

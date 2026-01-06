@@ -60,10 +60,24 @@ const UploadValidator = () => {
     if (!result || !result.errors || result.errors.length === 0) return;
 
     // Create CSV content
-    const headers = ['Row #', 'Sheet', 'Field Name', 'Error Message', 'Invalid Value'];
+    const headers = [
+      'Row #',
+      'Sheet',
+      'Survey ID',
+      'Question ID',
+      'Medium',
+      'Question Type',
+      'Field Name',
+      'Error Message',
+      'Invalid Value'
+    ];
     const rows = result.errors.map(err => [
       err.row,
       err.sheet,
+      err.surveyId || '',
+      err.questionId || '',
+      err.medium || '',
+      err.questionType || '',
       err.field,
       err.message,
       err.value
@@ -222,6 +236,10 @@ const UploadValidator = () => {
                         <tr>
                           <th>Row #</th>
                           <th>Sheet</th>
+                          <th>Survey ID</th>
+                          <th>Question ID</th>
+                          <th>Medium</th>
+                          <th>Question Type</th>
                           <th>Field Name</th>
                           <th>Error Message</th>
                           <th>Invalid Value</th>
@@ -232,6 +250,10 @@ const UploadValidator = () => {
                           <tr key={idx}>
                             <td>{err.row}</td>
                             <td><span className="sheet-badge">{err.sheet}</span></td>
+                            <td>{err.surveyId || '-'}</td>
+                            <td>{err.questionId || '-'}</td>
+                            <td>{err.medium || '-'}</td>
+                            <td>{err.questionType || '-'}</td>
                             <td><code>{err.field}</code></td>
                             <td>{err.message}</td>
                             <td className="error-value">{err.value || '(empty)'}</td>
