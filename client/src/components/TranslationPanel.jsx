@@ -1,9 +1,6 @@
 import React, { useState } from 'react';
 import { getNativeScript } from '../schemas/languageMappings';
 
-const TRANSLATE_API_URL = process.env.REACT_APP_TRANSLATE_API_URL || 'https://libretranslate.de/translate';
-const TRANSLATE_API_KEY = process.env.REACT_APP_TRANSLATE_API_KEY || '';
-
 const LANGUAGE_CODE_MAP = {
   English: 'en',
   Hindi: 'hi',
@@ -208,23 +205,16 @@ const TranslationPanel = ({
 
   const translateText = async (text, targetCode) => {
     if (!text) return '';
-    const payload = {
-      q: text,
-      source: 'en',
-      target: targetCode,
-      format: 'text'
-    };
-
-    if (TRANSLATE_API_KEY) {
-      payload.api_key = TRANSLATE_API_KEY;
-    }
-
-    const response = await fetch(TRANSLATE_API_URL, {
+    const response = await fetch('/api/translate', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        text,
+        source: 'en',
+        target: targetCode
+      })
     });
 
     if (!response.ok) {
@@ -453,26 +443,40 @@ const TranslationPanel = ({
         {fieldConfig?.showOptions && (
           <div className="options-section">
             <h5>Options (shared across languages)</h5>
-            <div className="options-grid">
-              <div className={`options-grid-header ${fieldConfig?.showOptionChildren ? 'has-children' : 'no-children'}`}>
-                {fieldConfig?.showOptionChildren && <div>Child Questions</div>}
-                {orderedLanguages.map(lang => (
-                  <div key={`${lang}-header`}>{lang}</div>
+            <div className="options-table">
+              <div className="options-table-row options-table-header">
+                <div className="options-table-cell options-table-label">Language</div>
+                {Array.from({ length: optionCount }).map((_, optionIndex) => (
+                  <div className="options-table-cell options-table-option" key={`option-header-${optionIndex}`}>
+                    <div className="options-table-option-header">
+                      <span>Option {optionIndex + 1}</span>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-danger"
+                        onClick={() => removeOption(optionIndex)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    {fieldConfig?.showOptionChildren && (
+                      <input
+                        type="text"
+                        className="options-table-child-input"
+                        value={(getTranslation(primaryLanguage).options || [])[optionIndex]?.children || ''}
+                        onChange={(e) => handleOptionChildrenChange(optionIndex, e.target.value)}
+                        placeholder="Child questions"
+                      />
+                    )}
+                  </div>
                 ))}
-                <div>Actions</div>
               </div>
 
-              {Array.from({ length: optionCount }).map((_, optionIndex) => (
-                <div className={`options-grid-row ${fieldConfig?.showOptionChildren ? 'has-children' : 'no-children'}`} key={`option-${optionIndex}`}>
-                  {fieldConfig?.showOptionChildren && (
-                    <input
-                      type="text"
-                      value={(getTranslation(primaryLanguage).options || [])[optionIndex]?.children || ''}
-                      onChange={(e) => handleOptionChildrenChange(optionIndex, e.target.value)}
-                      placeholder="Q1.1,Q1.2"
-                    />
-                  )}
-                  {orderedLanguages.map(lang => {
+              {orderedLanguages.map(lang => (
+                <div className="options-table-row" key={`option-row-${lang}`}>
+                  <div className="options-table-cell options-table-label">
+                    {lang} ({getNativeScript(lang)})
+                  </div>
+                  {Array.from({ length: optionCount }).map((_, optionIndex) => {
                     const option = (getTranslation(lang).options || [])[optionIndex] || {};
                     const value = option.text || '';
                     const handler = lang === primaryLanguage
@@ -483,21 +487,16 @@ const TranslationPanel = ({
                       <input
                         key={`${lang}-option-${optionIndex}`}
                         type="text"
+                        className="options-table-cell"
                         value={value}
                         onChange={handler}
-                        placeholder={`Option in ${lang}`}
+                        placeholder={`Option ${optionIndex + 1} in ${lang}`}
                       />
                     );
                   })}
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-danger"
-                    onClick={() => removeOption(optionIndex)}
-                  >
-                    Remove
-                  </button>
                 </div>
               ))}
+
             </div>
             <button
               type="button"

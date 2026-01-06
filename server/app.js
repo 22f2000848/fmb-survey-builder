@@ -8,6 +8,7 @@ const exportRouter = require('./routes/export');
 const validateUploadRouter = require('./routes/validateUpload');
 const validationSchemaRouter = require('./routes/validationSchema');
 const importRouter = require('./routes/import');
+const translateRouter = require('./routes/translate');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -23,6 +24,7 @@ app.use('/api/export', exportRouter);
 app.use('/api/validate-upload', validateUploadRouter);
 app.use('/api/validation-schema', validationSchemaRouter);
 app.use('/api/import', importRouter);
+app.use('/api/translate', translateRouter);
 
 // Health check
 app.get('/api/health', (req, res) => {
