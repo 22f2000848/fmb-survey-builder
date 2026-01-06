@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 {}
 const TabularTextInputRenderer = ({ question, language, onAnswer }) => {
   const translations = question.translations?.[language] || {};
@@ -21,6 +21,22 @@ const TabularTextInputRenderer = ({ question, language, onAnswer }) => {
     })
     .filter(q => q.key && q.value) || [];
 
+  const [responses, setResponses] = useState([]);
+
+  useEffect(() => {
+    setResponses(tableQuestions.map(() => ''));
+  }, [question.questionId, tableQuestionValue]);
+
+  const handleChange = (index, value) => {
+    setResponses(prev => {
+      const next = [...prev];
+      next[index] = value;
+      const answered = next.some(entry => entry && entry.trim() !== '');
+      onAnswer?.(question.questionId, { value: next, answered });
+      return next;
+    });
+  };
+
   return (
     <div className="tabular-text-input-renderer">
       <table className="preview-table">
@@ -39,7 +55,8 @@ const TabularTextInputRenderer = ({ question, language, onAnswer }) => {
                   type="text" 
                   className="preview-text-input"
                   placeholder="Enter text"
-                  onChange={() => onAnswer?.(question.questionId, { value: true, answered: true })}
+                  value={responses[idx] || ''}
+                  onChange={(e) => handleChange(idx, e.target.value)}
                 />
               </td>
             </tr>

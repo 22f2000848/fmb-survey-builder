@@ -254,6 +254,7 @@ const SurveyPreview = () => {
           </div>
         )}
         <QuestionRenderer 
+          key={currentQuestion?.questionId || 'preview-question'}
           question={currentQuestion} 
           language={effectiveLanguage}
           answer={answers[currentQuestion?.questionId]}
