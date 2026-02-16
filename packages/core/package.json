@@ -1,0 +1,13 @@
+{
+  "name": "@cg-dump/core",
+  "private": true,
+  "version": "1.0.0",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@cg-dump/db": "1.0.0",
+    "@cg-dump/shared": "1.0.0",
+    "jose": "^5.10.0",
+    "zod": "^4.1.11"
+  }
+}

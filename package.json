@@ -1,0 +1,17 @@
+{
+  "name": "cg-dump-server",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @cg-dump/web",
+    "build": "npm run build --workspace @cg-dump/web",
+    "start": "npm run start --workspace @cg-dump/web",
+    "lint": "npm run lint --workspace @cg-dump/web",
+    "typecheck": "npm run typecheck --workspace @cg-dump/web",
+    "test": "npm run test --workspaces --if-present"
+  }
+}
