@@ -61,3 +61,24 @@ export const CreateTemplateSchema = z.object({
   schema: z.record(z.string(), z.unknown())
 });
 export type CreateTemplateInput = z.infer<typeof CreateTemplateSchema>;
+
+export const DraftSelectorSchema = z.object({
+  productCode: z.string().min(2).max(24).regex(/^[A-Z0-9_]+$/),
+  stateCode: z.string().min(2).max(12).regex(/^[A-Z0-9_]+$/).optional()
+});
+export type DraftSelectorInput = z.infer<typeof DraftSelectorSchema>;
+
+export const CreateDraftSchema = DraftSelectorSchema.extend({
+  templateCode: z.string().min(2).max(64).regex(/^[A-Z0-9_]+$/).optional(),
+  name: z.string().min(2).max(180).optional()
+});
+export type CreateDraftInput = z.infer<typeof CreateDraftSchema>;
+
+export const UpdateDraftRowsSchema = DraftSelectorSchema.extend({
+  version: z.number().int().positive(),
+  rows: z.array(DatasetRowInputSchema).max(10000)
+});
+export type UpdateDraftRowsInput = z.infer<typeof UpdateDraftRowsSchema>;
+
+export const PublishDraftSchema = DraftSelectorSchema;
+export type PublishDraftInput = z.infer<typeof PublishDraftSchema>;

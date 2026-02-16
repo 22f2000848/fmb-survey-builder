@@ -1,7 +1,14 @@
 import { prisma } from "@cg-dump/db";
 import type { AuthContext } from "./auth";
 import { DomainError } from "./errors";
-import type { CreateDatasetInput, UpdateDatasetRowsInput } from "@cg-dump/shared";
+import type {
+  CreateDatasetInput,
+  CreateDraftInput,
+  DraftSelectorInput,
+  PublishDraftInput,
+  UpdateDatasetRowsInput,
+  UpdateDraftRowsInput
+} from "@cg-dump/shared";
 import { TemplateDefinitionSchema, validateRowAgainstTemplate } from "@cg-dump/shared";
 
 type DatasetFilters = {
@@ -44,6 +51,54 @@ async function assertProductEnabledForState(stateId: string, productId: string) 
   if (!enabled) {
     throw new DomainError(403, "Product is not enabled for this state", { stateId, productId });
   }
+}
+
+async function resolveStateScope(context: AuthContext, stateCode?: string) {
+  if (!isAdmin(context)) {
+    return context.user.stateId;
+  }
+  if (!stateCode) {
+    throw new DomainError(400, "stateCode is required for admin requests");
+  }
+  const state = await prisma.state.findUnique({
+    where: {
+      code: stateCode.trim().toUpperCase()
+    }
+  });
+  if (!state) {
+    throw new DomainError(404, "State not found", { stateCode });
+  }
+  return state.id;
+}
+
+async function resolveProductByCode(productCode: string) {
+  const code = productCode.trim().toUpperCase();
+  const product = await prisma.product.findUnique({
+    where: { code }
+  });
+  if (!product) {
+    throw new DomainError(404, "Product not found", { productCode: code });
+  }
+  return product;
+}
+
+async function findActiveDraft(stateId: string, productId: string) {
+  return prisma.dataset.findFirst({
+    where: {
+      stateId,
+      productId,
+      lifecycle: "DRAFT",
+      isActiveDraft: true
+    },
+    include: {
+      rows: {
+        orderBy: { rowIndex: "asc" }
+      },
+      product: true,
+      template: true,
+      state: true
+    }
+  });
 }
 
 export async function createDataset(context: AuthContext, input: CreateDatasetInput) {
@@ -249,4 +304,173 @@ export async function updateDatasetRows(context: AuthContext, datasetId: string,
   });
 
   return updated;
+}
+
+export async function createOrGetDraftDataset(context: AuthContext, input: CreateDraftInput) {
+  const stateId = await resolveStateScope(context, input.stateCode);
+  const product = await resolveProductByCode(input.productCode);
+  await assertProductEnabledForState(stateId, product.id);
+
+  const existing = await findActiveDraft(stateId, product.id);
+  if (existing) {
+    return { dataset: existing, created: false };
+  }
+
+  let template = null;
+  if (input.templateCode) {
+    template = await prisma.template.findFirst({
+      where: {
+        productId: product.id,
+        code: input.templateCode.trim().toUpperCase(),
+        isActive: true
+      }
+    });
+  } else {
+    template = await prisma.template.findFirst({
+      where: {
+        productId: product.id,
+        isActive: true
+      },
+      orderBy: {
+        code: "asc"
+      }
+    });
+  }
+
+  if (!template) {
+    throw new DomainError(404, "Active template not found for product", { productCode: product.code });
+  }
+
+  try {
+    const created = await prisma.dataset.create({
+      data: {
+        name: input.name?.trim() || `${product.code} Draft`,
+        productId: product.id,
+        templateId: template.id,
+        stateId,
+        createdByUserId: context.user.id,
+        lifecycle: "DRAFT",
+        isActiveDraft: true,
+        publishedVersion: null,
+        version: 1
+      },
+      include: {
+        rows: {
+          orderBy: { rowIndex: "asc" }
+        },
+        product: true,
+        template: true,
+        state: true
+      }
+    });
+    return { dataset: created, created: true };
+  } catch {
+    const concurrent = await findActiveDraft(stateId, product.id);
+    if (concurrent) {
+      return { dataset: concurrent, created: false };
+    }
+    throw new DomainError(500, "Failed to create draft dataset");
+  }
+}
+
+export async function getDraftDataset(context: AuthContext, input: DraftSelectorInput) {
+  const stateId = await resolveStateScope(context, input.stateCode);
+  const product = await resolveProductByCode(input.productCode);
+  await assertProductEnabledForState(stateId, product.id);
+
+  const draft = await findActiveDraft(stateId, product.id);
+  if (!draft) {
+    throw new DomainError(404, "Draft dataset not found", {
+      productCode: product.code
+    });
+  }
+  return draft;
+}
+
+export async function overwriteDraftRows(context: AuthContext, input: UpdateDraftRowsInput) {
+  const draft = await getDraftDataset(context, {
+    productCode: input.productCode,
+    stateCode: input.stateCode
+  });
+
+  return updateDatasetRows(context, draft.id, {
+    version: input.version,
+    rows: input.rows
+  });
+}
+
+export async function publishDraftDataset(context: AuthContext, input: PublishDraftInput) {
+  const draft = await getDraftDataset(context, input);
+
+  const parsedTemplate = TemplateDefinitionSchema.safeParse(draft.template.schema);
+  if (!parsedTemplate.success) {
+    throw new DomainError(500, "Dataset template schema is invalid");
+  }
+
+  const rowValidationErrors = draft.rows.flatMap((row) =>
+    validateRowAgainstTemplate(row.rowIndex, row.data as Record<string, unknown>, parsedTemplate.data)
+  );
+  if (rowValidationErrors.length > 0) {
+    throw new DomainError(400, "Row validation failed", {
+      errors: rowValidationErrors
+    });
+  }
+
+  const aggregate = await prisma.dataset.aggregate({
+    where: {
+      stateId: draft.stateId,
+      productId: draft.productId,
+      lifecycle: "PUBLISHED"
+    },
+    _max: {
+      publishedVersion: true
+    }
+  });
+  const nextPublishedVersion = (aggregate._max.publishedVersion || 0) + 1;
+
+  const published = await prisma.$transaction(async (tx) => {
+    const created = await tx.dataset.create({
+      data: {
+        name: draft.name,
+        productId: draft.productId,
+        templateId: draft.templateId,
+        stateId: draft.stateId,
+        createdByUserId: context.user.id,
+        lifecycle: "PUBLISHED",
+        isActiveDraft: false,
+        publishedVersion: nextPublishedVersion,
+        metadata: draft.metadata as any,
+        version: 1
+      },
+      include: {
+        product: true,
+        template: true,
+        state: true
+      }
+    });
+
+    if (draft.rows.length > 0) {
+      await tx.datasetRow.createMany({
+        data: draft.rows.map((row) => ({
+          datasetId: created.id,
+          rowIndex: row.rowIndex,
+          data: row.data as any
+        }))
+      });
+    }
+
+    return tx.dataset.findUniqueOrThrow({
+      where: { id: created.id },
+      include: {
+        rows: {
+          orderBy: { rowIndex: "asc" }
+        },
+        product: true,
+        template: true,
+        state: true
+      }
+    });
+  });
+
+  return published;
 }
