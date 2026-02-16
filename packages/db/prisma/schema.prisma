@@ -22,6 +22,8 @@ model User {
   state      State?   @relation(fields: [stateId], references: [id], onDelete: SetNull)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+  createdDatasets Dataset[] @relation("DatasetCreator")
+  auditLogs       AuditLog[] @relation("AuditActor")
 
   @@index([stateId])
 }
@@ -34,6 +36,8 @@ model State {
   updatedAt     DateTime       @updatedAt
   users         User[]
   stateProducts StateProduct[]
+  datasets      Dataset[]
+  auditLogs     AuditLog[]
 }
 
 model Product {
@@ -45,6 +49,8 @@ model Product {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   stateProducts StateProduct[]
+  templates     Template[]
+  datasets      Dataset[]
 }
 
 model StateProduct {
@@ -60,4 +66,75 @@ model StateProduct {
   @@unique([stateId, productId])
   @@index([stateId, enabled])
   @@index([productId, enabled])
+}
+
+model Template {
+  id          String   @id @default(cuid())
+  code        String
+  name        String
+  productId   String
+  schema      Json
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  datasets    Dataset[]
+
+  @@unique([productId, code])
+  @@index([productId, isActive])
+}
+
+model Dataset {
+  id              String      @id @default(cuid())
+  name            String
+  productId       String
+  templateId      String
+  stateId         String
+  createdByUserId String
+  version         Int         @default(1)
+  metadata        Json?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  product         Product     @relation(fields: [productId], references: [id], onDelete: Restrict)
+  template        Template    @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  state           State       @relation(fields: [stateId], references: [id], onDelete: Restrict)
+  createdByUser   User        @relation("DatasetCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  rows            DatasetRow[]
+  auditLogs       AuditLog[]
+
+  @@index([stateId, productId])
+  @@index([templateId])
+  @@index([createdByUserId])
+}
+
+model DatasetRow {
+  id        String   @id @default(cuid())
+  datasetId String
+  rowIndex  Int
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  dataset   Dataset  @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+
+  @@unique([datasetId, rowIndex])
+  @@index([datasetId])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorUserId String?
+  action      String
+  entityType  String
+  entityId    String
+  stateId     String?
+  datasetId   String?
+  details     Json?
+  createdAt   DateTime @default(now())
+  actorUser   User?    @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  state       State?   @relation(fields: [stateId], references: [id], onDelete: SetNull)
+  dataset     Dataset? @relation(fields: [datasetId], references: [id], onDelete: SetNull)
+
+  @@index([datasetId])
+  @@index([stateId])
+  @@index([createdAt])
 }
