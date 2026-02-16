@@ -118,6 +118,21 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const surveyData = req.body;
+
+    if (surveyData.surveyId !== req.params.id) {
+      return res.status(400).json({
+        error: 'Survey ID mismatch',
+        message: 'Payload surveyId must match the survey ID in the URL path',
+        details: [
+          {
+            field: 'surveyId',
+            expected: req.params.id,
+            received: surveyData.surveyId || ''
+          }
+        ],
+        errors: ['Payload surveyId must match the survey ID in the URL path']
+      });
+    }
     
     // Validate survey data
     const validation = validator.validateSurvey(surveyData);
