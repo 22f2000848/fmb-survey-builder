@@ -3,11 +3,15 @@ import { SetStateProductSchema } from "@cg-dump/shared";
 
 import { withAuth } from "@/server/auth";
 import { err, ok, withErrorBoundary } from "@/server/http";
+import { rateLimit } from "@/server/rate-limit";
 
 export const runtime = "nodejs";
 
 export async function PUT(request: Request) {
   return withErrorBoundary(async () => {
+    const limited = rateLimit(request, "admin:state-products", 40);
+    if (limited) return limited;
+
     const auth = await withAuth(request, "admin");
     if (!auth.ok) return auth.response;
 

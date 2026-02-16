@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { logError } from "@/server/logger";
 
 export type ErrorBody = {
   error: string;
@@ -27,6 +28,7 @@ export async function withErrorBoundary(
             message: error.message
           }
         : { value: String(error) };
+    logError(fallbackMessage, details as Record<string, unknown>);
     return err(500, fallbackMessage, details);
   }
 }

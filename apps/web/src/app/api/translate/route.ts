@@ -1,10 +1,14 @@
 import { config } from "@/server/config";
 import { err, ok, withErrorBoundary } from "@/server/http";
+import { rateLimit } from "@/server/rate-limit";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   return withErrorBoundary(async () => {
+    const limited = rateLimit(request, "translate", 100);
+    if (limited) return limited;
+
     const body = await request.json();
     const text = body?.text;
     const source = body?.source || "en";
