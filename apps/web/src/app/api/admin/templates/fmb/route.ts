@@ -1,6 +1,6 @@
 import { seedFmbTemplate } from "@cg-dump/core";
 
-import { requireAdmin } from "@/server/auth";
+import { withAdmin } from "@/server/auth";
 import { handleDomainError } from "@/server/domain";
 import { ok } from "@/server/http";
 import { rateLimit } from "@/server/rate-limit";
@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   const limited = rateLimit(request, "admin:templates:fmb", 20);
   if (limited) return limited;
 
-  const auth = await requireAdmin(request);
+  const auth = await withAdmin(request);
   if (!auth.ok) return auth.response;
 
   try {

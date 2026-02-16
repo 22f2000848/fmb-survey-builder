@@ -22,7 +22,7 @@ export type AuthContext = {
   user: {
     id: string;
     role: UserRole;
-    stateId: string;
+    stateId: string | null;
     cognitoSub: string;
     email: string | null;
   };
@@ -128,16 +128,22 @@ async function verifyToken(token: string): Promise<JWTPayload> {
   return verified.payload;
 }
 
-export async function requireAuth(
-  request: Request,
-  expectedRole?: UserRole | UserRole[]
+export async function verifyCognitoJwt(token: string): Promise<JWTPayload> {
+  return verifyToken(token);
+}
+
+export async function getRequestContext(
+  request: Request
 ): Promise<{ ok: true; context: AuthContext } | { ok: false; status: number; error: string; details?: unknown }> {
   if (AUTH_BYPASS) {
     const roleHeader = request.headers.get("x-dev-role");
     const role = roleHeader === "admin" ? "admin" : "state_user";
     const sub = request.headers.get("x-dev-sub") || `dev-${role}`;
     const email = request.headers.get("x-dev-email") || `dev-${role}@local.test`;
-    const stateId = await resolveDevStateId(request);
+    const requiredStateId = role === "state_user" ? await resolveDevStateId(request) : null;
+    const optionalStateHeader = request.headers.get("x-dev-state");
+    const optionalStateId = optionalStateHeader ? await resolveDevStateId(request) : null;
+    const stateId = requiredStateId ?? optionalStateId;
     let user = await prisma.user.findUnique({ where: { cognitoSub: sub } });
     if (!user) {
       user = await prisma.user.create({
@@ -148,16 +154,24 @@ export async function requireAuth(
           stateId
         }
       });
-    } else if (user.stateId !== stateId) {
+    } else if (user.stateId !== stateId || user.role !== role || user.email !== email) {
       user = await prisma.user.update({
         where: { id: user.id },
-        data: { stateId }
+        data: {
+          stateId,
+          role,
+          email
+        }
       });
     }
-    if (!ensureRole(expectedRole, role)) {
-      return { ok: false, status: 403, error: "Forbidden", details: { role } };
+    if (role === "state_user" && !user.stateId) {
+      return {
+        ok: false,
+        status: 403,
+        error: "Forbidden",
+        details: { message: "State user must have a state assignment" }
+      };
     }
-    const resolvedStateId = user.stateId ?? stateId;
     return {
       ok: true,
       context: {
@@ -168,7 +182,7 @@ export async function requireAuth(
         user: {
           id: user.id,
           role: user.role,
-          stateId: resolvedStateId,
+          stateId: user.stateId,
           cognitoSub: user.cognitoSub,
           email: user.email
         }
@@ -211,10 +225,6 @@ export async function requireAuth(
     };
   }
 
-  if (!ensureRole(expectedRole, role)) {
-    return { ok: false, status: 403, error: "Forbidden", details: { role } };
-  }
-
   const cognitoSub = String(payload.sub || "");
   if (!cognitoSub) {
     return { ok: false, status: 401, error: "Unauthorized", details: { message: "Token sub claim is required" } };
@@ -233,12 +243,12 @@ export async function requireAuth(
       details: { message: "User is not provisioned in platform database" }
     };
   }
-  if (!user.stateId) {
+  if (!user.isActive) {
     return {
       ok: false,
       status: 403,
       error: "Forbidden",
-      details: { message: "User is missing required state assignment" }
+      details: { message: "User is inactive" }
     };
   }
   if (user.role !== role) {
@@ -249,7 +259,15 @@ export async function requireAuth(
       details: { message: "User role does not match Cognito token role" }
     };
   }
-  if (tokenStateId && user.stateId !== tokenStateId) {
+  if (role === "state_user" && !user.stateId) {
+    return {
+      ok: false,
+      status: 403,
+      error: "Forbidden",
+      details: { message: "State user is missing required state assignment" }
+    };
+  }
+  if (role === "state_user" && tokenStateId && user.stateId !== tokenStateId) {
     return {
       ok: false,
       status: 403,
@@ -274,4 +292,17 @@ export async function requireAuth(
       }
     }
   };
+}
+
+export function requireAuth(
+  request: Request,
+  expectedRole?: UserRole | UserRole[]
+): Promise<{ ok: true; context: AuthContext } | { ok: false; status: number; error: string; details?: unknown }> {
+  return getRequestContext(request).then((auth) => {
+    if (!auth.ok) return auth;
+    if (!ensureRole(expectedRole, auth.context.role)) {
+      return { ok: false, status: 403, error: "Forbidden", details: { role: auth.context.role } };
+    }
+    return auth;
+  });
 }

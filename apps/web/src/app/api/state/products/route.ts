@@ -1,13 +1,13 @@
 import { listEnabledProductsForState } from "@cg-dump/core";
 
-import { requireStateUser } from "@/server/auth";
+import { withStateUser } from "@/server/auth";
 import { ok, withErrorBoundary } from "@/server/http";
 
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   return withErrorBoundary(async () => {
-    const auth = await requireStateUser(request);
+    const auth = await withStateUser(request);
     if (!auth.ok) return auth.response;
 
     const rows = await listEnabledProductsForState(auth.context.user.stateId);
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
       rows.map((row) => ({
         stateId: row.stateId,
         productId: row.productId,
-        enabled: row.enabled,
+        isEnabled: row.isEnabled,
         product: {
           code: row.product.code,
           name: row.product.name,

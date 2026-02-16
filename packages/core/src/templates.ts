@@ -7,6 +7,13 @@ function isAdmin(context: AuthContext) {
   return context.role === "admin";
 }
 
+function requireContextStateId(context: AuthContext): string {
+  if (context.user.stateId) {
+    return context.user.stateId;
+  }
+  throw new DomainError(403, "Forbidden", { message: "State scope is required for this operation" });
+}
+
 export async function createOrUpdateTemplate(input: CreateTemplateInput) {
   const productCode = input.productCode.trim().toUpperCase();
   const product = await prisma.product.findUnique({
@@ -43,12 +50,12 @@ export async function seedFmbTemplate() {
     where: { code: "FMB" },
     update: {
       name: "Foundational Literacy and Numeracy",
-      isGloballyOn: true
+      isActive: true
     },
     create: {
       code: "FMB",
       name: "Foundational Literacy and Numeracy",
-      isGloballyOn: true
+      isActive: true
     }
   });
 
@@ -85,13 +92,13 @@ export async function listTemplates(context: AuthContext, productCode: string) {
   }
 
   if (!isAdmin(context)) {
-    const stateId = context.user.stateId;
+    const stateId = requireContextStateId(context);
     const enabled = await prisma.stateProduct.findFirst({
       where: {
         stateId,
         productId: product.id,
-        enabled: true,
-        product: { isGloballyOn: true }
+        isEnabled: true,
+        product: { isActive: true }
       }
     });
     if (!enabled) {

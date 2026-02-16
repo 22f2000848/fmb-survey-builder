@@ -21,8 +21,15 @@ function isAdmin(context: AuthContext) {
   return context.role === "admin";
 }
 
+function requireContextStateId(context: AuthContext): string {
+  if (context.user.stateId) {
+    return context.user.stateId;
+  }
+  throw new DomainError(403, "Forbidden", { message: "State scope is required for this operation" });
+}
+
 function assertStateAccess(context: AuthContext, stateId: string) {
-  if (!isAdmin(context) && context.user.stateId !== stateId) {
+  if (!isAdmin(context) && requireContextStateId(context) !== stateId) {
     throw new DomainError(403, "Forbidden", { message: "State users can only access their own state data" });
   }
 }
@@ -33,7 +40,7 @@ function scopedDatasetWhere(context: AuthContext, datasetId: string) {
   }
   return {
     id: datasetId,
-    stateId: context.user.stateId
+    stateId: requireContextStateId(context)
   };
 }
 
@@ -42,9 +49,9 @@ async function assertProductEnabledForState(stateId: string, productId: string) 
     where: {
       stateId,
       productId,
-      enabled: true,
+      isEnabled: true,
       product: {
-        isGloballyOn: true
+        isActive: true
       }
     }
   });
@@ -55,7 +62,7 @@ async function assertProductEnabledForState(stateId: string, productId: string) 
 
 async function resolveStateScope(context: AuthContext, stateCode?: string) {
   if (!isAdmin(context)) {
-    return context.user.stateId;
+    return requireContextStateId(context);
   }
   if (!stateCode) {
     throw new DomainError(400, "stateCode is required for admin requests");
@@ -87,7 +94,7 @@ async function findActiveDraft(stateId: string, productId: string) {
     where: {
       stateId,
       productId,
-      lifecycle: "DRAFT",
+      status: "draft",
       isActiveDraft: true
     },
     include: {
@@ -135,7 +142,7 @@ export async function createDataset(context: AuthContext, input: CreateDatasetIn
     }
     stateId = state.id;
   } else {
-    stateId = context.user.stateId;
+    stateId = requireContextStateId(context);
   }
 
   await assertProductEnabledForState(stateId, product.id);
@@ -162,12 +169,13 @@ export async function createDataset(context: AuthContext, input: CreateDatasetIn
 export async function listDatasets(context: AuthContext, filters: DatasetFilters) {
   const where: Record<string, unknown> = {};
   if (!isAdmin(context)) {
-    where.stateId = context.user.stateId;
+    const stateId = requireContextStateId(context);
+    where.stateId = stateId;
     where.product = {
       stateProducts: {
         some: {
-          stateId: context.user.stateId,
-          enabled: true
+          stateId,
+          isEnabled: true
         }
       }
     };
@@ -185,7 +193,7 @@ export async function listDatasets(context: AuthContext, filters: DatasetFilters
       return [];
     }
     if (!isAdmin(context)) {
-      await assertProductEnabledForState(context.user.stateId, product.id);
+      await assertProductEnabledForState(requireContextStateId(context), product.id);
     }
     where.productId = product.id;
   }
@@ -349,9 +357,9 @@ export async function createOrGetDraftDataset(context: AuthContext, input: Creat
         templateId: template.id,
         stateId,
         createdByUserId: context.user.id,
-        lifecycle: "DRAFT",
+        status: "draft",
         isActiveDraft: true,
-        publishedVersion: null,
+        versionNumber: null,
         version: 1
       },
       include: {
@@ -388,15 +396,58 @@ export async function getDraftDataset(context: AuthContext, input: DraftSelector
 }
 
 export async function overwriteDraftRows(context: AuthContext, input: UpdateDraftRowsInput) {
+  if (input.rows.length > 10000) {
+    throw new DomainError(400, "Too many rows", { message: "rows exceeds maximum limit of 10000" });
+  }
+
   const draft = await getDraftDataset(context, {
     productCode: input.productCode,
     stateCode: input.stateCode
   });
 
-  return updateDatasetRows(context, draft.id, {
-    version: input.version,
-    rows: input.rows
+  if (input.version) {
+    return updateDatasetRows(context, draft.id, {
+      version: input.version,
+      rows: input.rows
+    });
+  }
+
+  const rows = input.rows.map((row) => ({
+    datasetId: draft.id,
+    rowIndex: row.rowIndex,
+    data: row.data as any
+  }));
+
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.datasetRow.deleteMany({
+      where: { datasetId: draft.id }
+    });
+
+    if (rows.length > 0) {
+      await tx.datasetRow.createMany({
+        data: rows
+      });
+    }
+
+    return tx.dataset.update({
+      where: { id: draft.id },
+      data: {
+        version: {
+          increment: 1
+        }
+      },
+      include: {
+        rows: {
+          orderBy: { rowIndex: "asc" }
+        },
+        product: true,
+        template: true,
+        state: true
+      }
+    });
   });
+
+  return updated;
 }
 
 export async function publishDraftDataset(context: AuthContext, input: PublishDraftInput) {
@@ -420,13 +471,13 @@ export async function publishDraftDataset(context: AuthContext, input: PublishDr
     where: {
       stateId: draft.stateId,
       productId: draft.productId,
-      lifecycle: "PUBLISHED"
+      status: "published"
     },
     _max: {
-      publishedVersion: true
+      versionNumber: true
     }
   });
-  const nextPublishedVersion = (aggregate._max.publishedVersion || 0) + 1;
+  const nextPublishedVersion = (aggregate._max.versionNumber || 0) + 1;
 
   const published = await prisma.$transaction(async (tx) => {
     const created = await tx.dataset.create({
@@ -436,9 +487,9 @@ export async function publishDraftDataset(context: AuthContext, input: PublishDr
         templateId: draft.templateId,
         stateId: draft.stateId,
         createdByUserId: context.user.id,
-        lifecycle: "PUBLISHED",
+        status: "published",
         isActiveDraft: false,
-        publishedVersion: nextPublishedVersion,
+        versionNumber: nextPublishedVersion,
         metadata: draft.metadata as any,
         version: 1
       },

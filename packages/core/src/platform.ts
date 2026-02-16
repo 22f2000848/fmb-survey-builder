@@ -1,11 +1,28 @@
 import { prisma } from "@cg-dump/db";
-import type { CreateStateInput, CreateStateUserInput, SetStateProductInput } from "@cg-dump/shared";
+import type { CreateProductInput, CreateStateInput, CreateStateUserInput, SetStateProductInput } from "@cg-dump/shared";
 
 export async function createState(input: CreateStateInput) {
   return prisma.state.create({
     data: {
       code: input.code.trim().toUpperCase(),
       name: input.name.trim()
+    }
+  });
+}
+
+export async function createProduct(input: CreateProductInput) {
+  return prisma.product.upsert({
+    where: {
+      code: input.code.trim().toUpperCase()
+    },
+    update: {
+      name: input.name.trim(),
+      isActive: true
+    },
+    create: {
+      code: input.code.trim().toUpperCase(),
+      name: input.name.trim(),
+      isActive: true
     }
   });
 }
@@ -65,12 +82,12 @@ export async function setStateProductEnablement(input: SetStateProductInput) {
       }
     },
     update: {
-      enabled: input.enabled
+      isEnabled: input.isEnabled
     },
     create: {
       stateId: state.id,
       productId: product.id,
-      enabled: input.enabled
+      isEnabled: input.isEnabled
     },
     include: {
       state: true,
@@ -83,9 +100,9 @@ export async function listEnabledProductsForState(stateId: string) {
   return prisma.stateProduct.findMany({
     where: {
       stateId,
-      enabled: true,
+      isEnabled: true,
       product: {
-        isGloballyOn: true
+        isActive: true
       }
     },
     include: {

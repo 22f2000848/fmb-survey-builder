@@ -1,24 +1,20 @@
 import { createOrGetDraftDataset, getDraftDataset } from "@cg-dump/core";
-import { CreateDraftSchema, DraftSelectorSchema } from "@cg-dump/shared";
+import { CreateDraftForStateUserSchema, DraftSelectorForStateUserSchema } from "@cg-dump/shared";
 
-import { withAuth } from "@/server/auth";
+import { withStateUser } from "@/server/auth";
 import { handleDomainError } from "@/server/domain";
 import { err, ok } from "@/server/http";
 
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
-  const auth = await withAuth(request, ["admin", "state_user"]);
+  const auth = await withStateUser(request);
   if (!auth.ok) return auth.response;
 
   try {
     const { searchParams } = new URL(request.url);
     const productCode = searchParams.get("product") || searchParams.get("productCode");
-    const stateCode = searchParams.get("stateCode") || undefined;
-    const parsed = DraftSelectorSchema.safeParse({
-      productCode,
-      stateCode
-    });
+    const parsed = DraftSelectorForStateUserSchema.safeParse({ productCode });
     if (!parsed.success) {
       return err(400, "Invalid request", parsed.error.flatten());
     }
@@ -28,7 +24,7 @@ export async function GET(request: Request) {
       id: draft.id,
       name: draft.name,
       version: draft.version,
-      lifecycle: draft.lifecycle,
+      status: draft.status,
       state: {
         id: draft.state.id,
         code: draft.state.code,
@@ -59,12 +55,12 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await withAuth(request, ["admin", "state_user"]);
+  const auth = await withStateUser(request);
   if (!auth.ok) return auth.response;
 
   try {
     const body = await request.json();
-    const parsed = CreateDraftSchema.safeParse(body);
+    const parsed = CreateDraftForStateUserSchema.safeParse(body);
     if (!parsed.success) {
       return err(400, "Invalid request", parsed.error.flatten());
     }
@@ -77,7 +73,7 @@ export async function POST(request: Request) {
           id: result.dataset.id,
           name: result.dataset.name,
           version: result.dataset.version,
-          lifecycle: result.dataset.lifecycle,
+          status: result.dataset.status,
           productCode: result.dataset.product.code,
           stateCode: result.dataset.state.code
         }

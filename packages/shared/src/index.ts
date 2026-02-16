@@ -29,9 +29,15 @@ export const SetStateProductSchema = z.object({
   stateCode: z.string().min(2).max(12).regex(/^[A-Z0-9_]+$/),
   productCode: z.string().min(2).max(24).regex(/^[A-Z0-9_]+$/),
   productName: z.string().min(2).max(120).optional(),
-  enabled: z.boolean()
+  isEnabled: z.boolean()
 });
 export type SetStateProductInput = z.infer<typeof SetStateProductSchema>;
+
+export const CreateProductSchema = z.object({
+  code: z.string().min(2).max(24).regex(/^[A-Z0-9_]+$/),
+  name: z.string().min(2).max(120)
+});
+export type CreateProductInput = z.infer<typeof CreateProductSchema>;
 
 export const CreateDatasetSchema = z.object({
   name: z.string().min(2).max(180),
@@ -74,11 +80,33 @@ export const CreateDraftSchema = DraftSelectorSchema.extend({
 });
 export type CreateDraftInput = z.infer<typeof CreateDraftSchema>;
 
+export const CreateDraftForStateUserSchema = z
+  .object({
+    productCode: z.string().min(2).max(24).regex(/^[A-Z0-9_]+$/)
+  })
+  .strict();
+export type CreateDraftForStateUserInput = z.infer<typeof CreateDraftForStateUserSchema>;
+
 export const UpdateDraftRowsSchema = DraftSelectorSchema.extend({
-  version: z.number().int().positive(),
+  version: z.number().int().positive().optional(),
   rows: z.array(DatasetRowInputSchema).max(10000)
 });
 export type UpdateDraftRowsInput = z.infer<typeof UpdateDraftRowsSchema>;
 
 export const PublishDraftSchema = DraftSelectorSchema;
 export type PublishDraftInput = z.infer<typeof PublishDraftSchema>;
+
+export const DraftSelectorForStateUserSchema = z
+  .object({
+    productCode: z.string().min(2).max(24).regex(/^[A-Z0-9_]+$/)
+  })
+  .strict();
+export type DraftSelectorForStateUserInput = z.infer<typeof DraftSelectorForStateUserSchema>;
+
+export const UpdateDraftRowsForStateUserSchema = z
+  .object({
+    productCode: z.string().min(2).max(24).regex(/^[A-Z0-9_]+$/),
+    rows: z.array(DatasetRowInputSchema)
+  })
+  .strict();
+export type UpdateDraftRowsForStateUserInput = z.infer<typeof UpdateDraftRowsForStateUserSchema>;

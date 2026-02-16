@@ -1,5 +1,5 @@
-import { createState } from "@cg-dump/core";
-import { CreateStateSchema } from "@cg-dump/shared";
+import { createProduct } from "@cg-dump/core";
+import { CreateProductSchema } from "@cg-dump/shared";
 
 import { withAdmin } from "@/server/auth";
 import { err, ok, withErrorBoundary } from "@/server/http";
@@ -9,26 +9,27 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   return withErrorBoundary(async () => {
-    const limited = rateLimit(request, "admin:states", 30);
+    const limited = rateLimit(request, "admin:products", 30);
     if (limited) return limited;
 
     const auth = await withAdmin(request);
     if (!auth.ok) return auth.response;
 
     const body = await request.json();
-    const parsed = CreateStateSchema.safeParse(body);
+    const parsed = CreateProductSchema.safeParse(body);
     if (!parsed.success) {
       return err(400, "Invalid request", parsed.error.flatten());
     }
 
-    const state = await createState(parsed.data);
+    const product = await createProduct(parsed.data);
     return ok(
       {
-        id: state.id,
-        code: state.code,
-        name: state.name
+        id: product.id,
+        code: product.code,
+        name: product.name,
+        isActive: product.isActive
       },
       { status: 201 }
     );
-  }, "Failed to create state");
+  }, "Failed to create product");
 }

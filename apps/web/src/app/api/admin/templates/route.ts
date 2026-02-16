@@ -1,7 +1,7 @@
 import { createOrUpdateTemplate } from "@cg-dump/core";
 import { CreateTemplateSchema } from "@cg-dump/shared";
 
-import { requireAdmin } from "@/server/auth";
+import { withAdmin } from "@/server/auth";
 import { handleDomainError } from "@/server/domain";
 import { err, ok } from "@/server/http";
 import { rateLimit } from "@/server/rate-limit";
@@ -12,7 +12,7 @@ export async function POST(request: Request) {
   const limited = rateLimit(request, "admin:templates", 40);
   if (limited) return limited;
 
-  const auth = await requireAdmin(request);
+  const auth = await withAdmin(request);
   if (!auth.ok) return auth.response;
 
   try {

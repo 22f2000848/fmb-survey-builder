@@ -1,11 +1,11 @@
-﻿-- CreateSchema
+-- CreateSchema
 CREATE SCHEMA IF NOT EXISTS "public";
 
 -- CreateEnum
 CREATE TYPE "UserRole" AS ENUM ('admin', 'state_user');
 
 -- CreateEnum
-CREATE TYPE "DatasetLifecycle" AS ENUM ('DRAFT', 'PUBLISHED');
+CREATE TYPE "DatasetStatus" AS ENUM ('draft', 'published');
 
 -- CreateTable
 CREATE TABLE "User" (
@@ -14,7 +14,8 @@ CREATE TABLE "User" (
     "email" TEXT,
     "fullName" TEXT,
     "role" "UserRole" NOT NULL,
-    "stateId" TEXT NOT NULL,
+    "stateId" TEXT,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -26,6 +27,7 @@ CREATE TABLE "State" (
     "id" TEXT NOT NULL,
     "code" TEXT NOT NULL,
     "name" TEXT NOT NULL,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -38,7 +40,7 @@ CREATE TABLE "Product" (
     "code" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "description" TEXT,
-    "isGloballyOn" BOOLEAN NOT NULL DEFAULT true,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -50,7 +52,7 @@ CREATE TABLE "StateProduct" (
     "id" TEXT NOT NULL,
     "stateId" TEXT NOT NULL,
     "productId" TEXT NOT NULL,
-    "enabled" BOOLEAN NOT NULL DEFAULT true,
+    "isEnabled" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -80,9 +82,9 @@ CREATE TABLE "Dataset" (
     "stateId" TEXT NOT NULL,
     "createdByUserId" TEXT NOT NULL,
     "version" INTEGER NOT NULL DEFAULT 1,
-    "lifecycle" "DatasetLifecycle" NOT NULL DEFAULT 'DRAFT',
+    "status" "DatasetStatus" NOT NULL DEFAULT 'draft',
     "isActiveDraft" BOOLEAN NOT NULL DEFAULT false,
-    "publishedVersion" INTEGER,
+    "versionNumber" INTEGER,
     "metadata" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -124,34 +126,43 @@ CREATE UNIQUE INDEX "User_cognitoSub_key" ON "User"("cognitoSub");
 CREATE INDEX "User_stateId_idx" ON "User"("stateId");
 
 -- CreateIndex
+CREATE INDEX "User_isActive_idx" ON "User"("isActive");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "State_code_key" ON "State"("code");
+
+-- CreateIndex
+CREATE INDEX "State_isActive_idx" ON "State"("isActive");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Product_code_key" ON "Product"("code");
 
 -- CreateIndex
-CREATE INDEX "StateProduct_stateId_enabled_idx" ON "StateProduct"("stateId", "enabled");
-
--- CreateIndex
-CREATE INDEX "StateProduct_productId_enabled_idx" ON "StateProduct"("productId", "enabled");
+CREATE INDEX "Product_isActive_idx" ON "Product"("isActive");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "StateProduct_stateId_productId_key" ON "StateProduct"("stateId", "productId");
 
 -- CreateIndex
-CREATE INDEX "Template_productId_isActive_idx" ON "Template"("productId", "isActive");
+CREATE INDEX "StateProduct_stateId_isEnabled_idx" ON "StateProduct"("stateId", "isEnabled");
+
+-- CreateIndex
+CREATE INDEX "StateProduct_productId_isEnabled_idx" ON "StateProduct"("productId", "isEnabled");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Template_productId_code_key" ON "Template"("productId", "code");
 
 -- CreateIndex
+CREATE INDEX "Template_productId_isActive_idx" ON "Template"("productId", "isActive");
+
+-- CreateIndex
 CREATE INDEX "Dataset_stateId_productId_idx" ON "Dataset"("stateId", "productId");
 
 -- CreateIndex
-CREATE INDEX "Dataset_stateId_productId_lifecycle_isActiveDraft_idx" ON "Dataset"("stateId", "productId", "lifecycle", "isActiveDraft");
+CREATE INDEX "Dataset_stateId_productId_status_isActiveDraft_idx" ON "Dataset"("stateId", "productId", "status", "isActiveDraft");
 
 -- CreateIndex
-CREATE INDEX "Dataset_stateId_productId_publishedVersion_idx" ON "Dataset"("stateId", "productId", "publishedVersion");
+CREATE INDEX "Dataset_stateId_productId_versionNumber_idx" ON "Dataset"("stateId", "productId", "versionNumber");
 
 -- CreateIndex
 CREATE INDEX "Dataset_templateId_idx" ON "Dataset"("templateId");
@@ -160,10 +171,13 @@ CREATE INDEX "Dataset_templateId_idx" ON "Dataset"("templateId");
 CREATE INDEX "Dataset_createdByUserId_idx" ON "Dataset"("createdByUserId");
 
 -- CreateIndex
-CREATE INDEX "DatasetRow_datasetId_idx" ON "DatasetRow"("datasetId");
+CREATE INDEX "Dataset_status_idx" ON "Dataset"("status");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "DatasetRow_datasetId_rowIndex_key" ON "DatasetRow"("datasetId", "rowIndex");
+
+-- CreateIndex
+CREATE INDEX "DatasetRow_datasetId_idx" ON "DatasetRow"("datasetId");
 
 -- CreateIndex
 CREATE INDEX "AuditLog_datasetId_idx" ON "AuditLog"("datasetId");
@@ -175,7 +189,7 @@ CREATE INDEX "AuditLog_stateId_idx" ON "AuditLog"("stateId");
 CREATE INDEX "AuditLog_createdAt_idx" ON "AuditLog"("createdAt");
 
 -- AddForeignKey
-ALTER TABLE "User" ADD CONSTRAINT "User_stateId_fkey" FOREIGN KEY ("stateId") REFERENCES "State"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "User" ADD CONSTRAINT "User_stateId_fkey" FOREIGN KEY ("stateId") REFERENCES "State"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "StateProduct" ADD CONSTRAINT "StateProduct_stateId_fkey" FOREIGN KEY ("stateId") REFERENCES "State"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -213,11 +227,9 @@ ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_datasetId_fkey" FOREIGN KEY ("da
 -- One active draft per (state, product)
 CREATE UNIQUE INDEX "Dataset_one_active_draft_per_state_product_key"
 ON "Dataset" ("stateId", "productId")
-WHERE ("lifecycle" = 'DRAFT' AND "isActiveDraft" = true);
+WHERE ("status" = 'draft' AND "isActiveDraft" = true);
 
 -- Immutable published version uniqueness per (state, product, version)
 CREATE UNIQUE INDEX "Dataset_published_version_per_state_product_key"
-ON "Dataset" ("stateId", "productId", "publishedVersion")
-WHERE ("lifecycle" = 'PUBLISHED');
-
-
+ON "Dataset" ("stateId", "productId", "versionNumber")
+WHERE ("status" = 'published');

@@ -53,22 +53,154 @@ fmb-survey-builder/
 
 ### Platform routes (authenticated)
 
-- Admin:
+- Admin: 
   - `POST /api/admin/states`
+  - `POST /api/admin/products`
   - `POST /api/admin/users`
+  - `PUT /api/admin/states/:stateCode/products/:productCode`
   - `PUT /api/admin/state-products`
   - `POST /api/admin/templates`
   - `POST /api/admin/templates/fmb`
 - State/Admin:
+  - `GET /api/me`
+  - `GET /api/products`
   - `GET /api/state/products`
   - `GET/POST /api/datasets`
   - `GET /api/datasets/:datasetId`
   - `PUT /api/datasets/:datasetId/rows`
+  - `POST /api/datasets/draft`
+  - `GET /api/datasets/draft?productCode=FMB`
+  - `PUT /api/datasets/draft/rows`
+  - `POST /api/datasets/publish`
   - `POST /api/datasets/:datasetId/import/xlsx`
   - `GET /api/datasets/:datasetId/export/xlsx`
   - `GET /api/templates?productCode=FMB`
   - `POST /api/storage/presign-upload`
   - `POST /api/storage/presign-download`
+
+## Seed Data
+
+```bash
+npm run prisma:seed --workspace @cg-dump/db
+```
+
+Seeded records:
+
+- state: `RJ`
+- product: `FMB`
+- admin user: `cognitoSub=seed-admin-sub`
+- state user: `cognitoSub=seed-rj-user-sub`
+
+## Curl Examples (Phase 2/3 Backbone)
+
+For local bypass auth, set `AUTH_BYPASS=true` and use headers:
+
+- admin: `x-dev-role: admin`
+- state user: `x-dev-role: state_user`
+- optional state for bypass: `x-dev-state: RJ`
+
+### `GET /api/me`
+
+```bash
+curl -s http://localhost:3000/api/me \
+  -H "x-dev-role: state_user" \
+  -H "x-dev-state: RJ"
+```
+
+### `GET /api/products`
+
+State user:
+
+```bash
+curl -s http://localhost:3000/api/products \
+  -H "x-dev-role: state_user" \
+  -H "x-dev-state: RJ"
+```
+
+Admin (all products):
+
+```bash
+curl -s http://localhost:3000/api/products \
+  -H "x-dev-role: admin"
+```
+
+Admin (with per-state enablement):
+
+```bash
+curl -s "http://localhost:3000/api/products?stateCode=RJ" \
+  -H "x-dev-role: admin"
+```
+
+### `POST /api/datasets/draft`
+
+```bash
+curl -s -X POST http://localhost:3000/api/datasets/draft \
+  -H "Content-Type: application/json" \
+  -H "x-dev-role: state_user" \
+  -H "x-dev-state: RJ" \
+  -d '{"productCode":"FMB"}'
+```
+
+### `GET /api/datasets/draft?productCode=FMB`
+
+```bash
+curl -s "http://localhost:3000/api/datasets/draft?productCode=FMB" \
+  -H "x-dev-role: state_user" \
+  -H "x-dev-state: RJ"
+```
+
+### `PUT /api/datasets/draft/rows`
+
+```bash
+curl -s -X PUT http://localhost:3000/api/datasets/draft/rows \
+  -H "Content-Type: application/json" \
+  -H "x-dev-role: state_user" \
+  -H "x-dev-state: RJ" \
+  -d '{
+    "productCode":"FMB",
+    "rows":[
+      { "rowIndex": 1, "data": { "school_name": "Alpha School" } },
+      { "rowIndex": 2, "data": { "school_name": "Beta School" } }
+    ]
+  }'
+```
+
+### `POST /api/datasets/publish`
+
+```bash
+curl -s -X POST http://localhost:3000/api/datasets/publish \
+  -H "Content-Type: application/json" \
+  -H "x-dev-role: state_user" \
+  -H "x-dev-state: RJ" \
+  -d '{"productCode":"FMB"}'
+```
+
+### `POST /api/admin/states`
+
+```bash
+curl -s -X POST http://localhost:3000/api/admin/states \
+  -H "Content-Type: application/json" \
+  -H "x-dev-role: admin" \
+  -d '{"code":"MH","name":"Maharashtra"}'
+```
+
+### `POST /api/admin/products`
+
+```bash
+curl -s -X POST http://localhost:3000/api/admin/products \
+  -H "Content-Type: application/json" \
+  -H "x-dev-role: admin" \
+  -d '{"code":"SBA","name":"School Basic Assessment"}'
+```
+
+### `PUT /api/admin/states/:stateCode/products/:productCode`
+
+```bash
+curl -s -X PUT http://localhost:3000/api/admin/states/RJ/products/FMB \
+  -H "Content-Type: application/json" \
+  -H "x-dev-role: admin" \
+  -d '{"isEnabled":true}'
+```
 
 ## Local Development
 

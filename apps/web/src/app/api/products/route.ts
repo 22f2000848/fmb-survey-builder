@@ -1,32 +1,9 @@
 import { prisma } from "@cg-dump/db";
-import { listEnabledProductsForState } from "@cg-dump/core";
 
 import { withAuth } from "@/server/auth";
 import { err, ok, withErrorBoundary } from "@/server/http";
 
 export const runtime = "nodejs";
-
-async function resolveStateIdForProducts(role: "admin" | "state_user", stateId: string, stateCode?: string | null) {
-  if (role === "state_user") {
-    return stateId;
-  }
-
-  if (!stateCode) {
-    throw new Error("stateCode query parameter is required for admin");
-  }
-
-  const state = await prisma.state.findUnique({
-    where: {
-      code: stateCode.trim().toUpperCase()
-    }
-  });
-
-  if (!state) {
-    throw new Error(`State "${stateCode}" not found`);
-  }
-
-  return state.id;
-}
 
 export async function GET(request: Request) {
   return withErrorBoundary(async () => {
@@ -34,29 +11,99 @@ export async function GET(request: Request) {
     if (!auth.ok) return auth.response;
 
     const { searchParams } = new URL(request.url);
-    const stateCode = searchParams.get("stateCode");
+    const stateCode = searchParams.get("stateCode")?.trim().toUpperCase() || null;
 
-    let scopedStateId: string;
-    try {
-      scopedStateId = await resolveStateIdForProducts(auth.context.role, auth.context.user.stateId, stateCode);
-    } catch (error) {
-      return err(400, "Invalid request", {
-        message: error instanceof Error ? error.message : String(error)
+    if (auth.context.role === "state_user") {
+      const stateId = auth.context.user.stateId;
+      if (!stateId) {
+        return err(403, "Forbidden", { message: "State user is missing required state assignment" });
+      }
+
+      const rows = await prisma.stateProduct.findMany({
+        where: {
+          stateId,
+          isEnabled: true,
+          product: {
+            isActive: true
+          }
+        },
+        include: {
+          product: true
+        },
+        orderBy: {
+          product: {
+            code: "asc"
+          }
+        }
       });
-    }
 
-    const rows = await listEnabledProductsForState(scopedStateId);
-    return ok(
-      rows.map((row) => ({
-        stateId: row.stateId,
-        productId: row.productId,
-        enabled: row.enabled,
-        product: {
+      return ok(
+        rows.map((row) => ({
           id: row.product.id,
           code: row.product.code,
           name: row.product.name,
-          description: row.product.description
+          description: row.product.description,
+          isActive: row.product.isActive,
+          isEnabled: row.isEnabled
+        }))
+      );
+    }
+
+    let scopedStateId: string | null = null;
+    if (stateCode) {
+      const state = await prisma.state.findUnique({
+        where: {
+          code: stateCode
         }
+      });
+      if (!state) {
+        return err(404, "State not found", { stateCode });
+      }
+      scopedStateId = state.id;
+    }
+
+    if (!scopedStateId) {
+      const products = await prisma.product.findMany({
+        orderBy: {
+          code: "asc"
+        }
+      });
+      return ok(
+        products.map((product) => ({
+          id: product.id,
+          code: product.code,
+          name: product.name,
+          description: product.description,
+          isActive: product.isActive
+        }))
+      );
+    }
+
+    const products = await prisma.product.findMany({
+      include: {
+        stateProducts: {
+          where: {
+            stateId: scopedStateId
+          },
+          select: {
+            isEnabled: true
+          },
+          take: 1
+        }
+      },
+      orderBy: {
+        code: "asc"
+      }
+    });
+
+    return ok(
+      products.map((product) => ({
+        id: product.id,
+        code: product.code,
+        name: product.name,
+        description: product.description,
+        isActive: product.isActive,
+        isEnabled: product.stateProducts[0]?.isEnabled ?? false
       }))
     );
   }, "Failed to list products");

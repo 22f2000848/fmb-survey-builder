@@ -1,19 +1,19 @@
 import { publishDraftDataset } from "@cg-dump/core";
-import { PublishDraftSchema } from "@cg-dump/shared";
+import { DraftSelectorForStateUserSchema } from "@cg-dump/shared";
 
-import { withAuth } from "@/server/auth";
+import { withStateUser } from "@/server/auth";
 import { handleDomainError } from "@/server/domain";
 import { err, ok } from "@/server/http";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  const auth = await withAuth(request, ["admin", "state_user"]);
+  const auth = await withStateUser(request);
   if (!auth.ok) return auth.response;
 
   try {
     const body = await request.json();
-    const parsed = PublishDraftSchema.safeParse(body);
+    const parsed = DraftSelectorForStateUserSchema.safeParse(body);
     if (!parsed.success) {
       return err(400, "Invalid request", parsed.error.flatten());
     }
@@ -24,8 +24,8 @@ export async function POST(request: Request) {
         published: {
           id: published.id,
           name: published.name,
-          lifecycle: published.lifecycle,
-          publishedVersion: published.publishedVersion,
+          status: published.status,
+          versionNumber: published.versionNumber,
           stateCode: published.state.code,
           productCode: published.product.code,
           createdAt: published.createdAt

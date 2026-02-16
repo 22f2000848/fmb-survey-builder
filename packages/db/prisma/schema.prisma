@@ -12,9 +12,9 @@ enum UserRole {
   state_user
 }
 
-enum DatasetLifecycle {
-  DRAFT
-  PUBLISHED
+enum DatasetStatus {
+  draft
+  published
 }
 
 model User {
@@ -23,26 +23,31 @@ model User {
   email      String?
   fullName   String?
   role       UserRole
-  stateId    String
-  state      State    @relation(fields: [stateId], references: [id], onDelete: Restrict)
+  stateId    String?
+  state      State?   @relation(fields: [stateId], references: [id], onDelete: SetNull)
+  isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   createdDatasets Dataset[] @relation("DatasetCreator")
   auditLogs       AuditLog[] @relation("AuditActor")
 
   @@index([stateId])
+  @@index([isActive])
 }
 
 model State {
   id            String         @id @default(cuid())
   code          String         @unique
   name          String
+  isActive      Boolean        @default(true)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   users         User[]
   stateProducts StateProduct[]
   datasets      Dataset[]
   auditLogs     AuditLog[]
+
+  @@index([isActive])
 }
 
 model Product {
@@ -50,27 +55,29 @@ model Product {
   code          String         @unique
   name          String
   description   String?
-  isGloballyOn  Boolean        @default(true)
+  isActive      Boolean        @default(true)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   stateProducts StateProduct[]
   templates     Template[]
   datasets      Dataset[]
+
+  @@index([isActive])
 }
 
 model StateProduct {
   id         String   @id @default(cuid())
   stateId    String
   productId  String
-  enabled    Boolean  @default(true)
+  isEnabled  Boolean  @default(true)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   state      State    @relation(fields: [stateId], references: [id], onDelete: Cascade)
   product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@unique([stateId, productId])
-  @@index([stateId, enabled])
-  @@index([productId, enabled])
+  @@index([stateId, isEnabled])
+  @@index([productId, isEnabled])
 }
 
 model Template {
@@ -97,9 +104,9 @@ model Dataset {
   stateId         String
   createdByUserId String
   version         Int         @default(1)
-  lifecycle       DatasetLifecycle @default(DRAFT)
+  status          DatasetStatus @default(draft)
   isActiveDraft   Boolean     @default(false)
-  publishedVersion Int?
+  versionNumber   Int?
   metadata        Json?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
@@ -111,10 +118,11 @@ model Dataset {
   auditLogs       AuditLog[]
 
   @@index([stateId, productId])
-  @@index([stateId, productId, lifecycle, isActiveDraft])
-  @@index([stateId, productId, publishedVersion])
+  @@index([stateId, productId, status, isActiveDraft])
+  @@index([stateId, productId, versionNumber])
   @@index([templateId])
   @@index([createdByUserId])
+  @@index([status])
 }
 
 model DatasetRow {
