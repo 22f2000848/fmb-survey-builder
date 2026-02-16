@@ -70,7 +70,7 @@ export async function createDataset(context: AuthContext, input: CreateDatasetIn
     }
     stateId = state.id;
   } else {
-    stateId = context.user.stateId as string;
+    stateId = context.user.stateId;
   }
 
   await assertProductEnabledForState(stateId, product.id);
@@ -120,7 +120,7 @@ export async function listDatasets(context: AuthContext, filters: DatasetFilters
       return [];
     }
     if (!isAdmin(context)) {
-      await assertProductEnabledForState(context.user.stateId as string, product.id);
+      await assertProductEnabledForState(context.user.stateId, product.id);
     }
     where.productId = product.id;
   }

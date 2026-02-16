@@ -21,11 +21,25 @@ export type AuthContext = {
   user: {
     id: string;
     role: UserRole;
-    stateId: string | null;
+    stateId: string;
     cognitoSub: string;
     email: string | null;
   };
 };
+
+async function resolveDevStateId(request: Request): Promise<string> {
+  const rawCode = request.headers.get("x-dev-state") || "DEV_STATE";
+  const code = rawCode.trim().toUpperCase();
+  const state = await prisma.state.upsert({
+    where: { code },
+    update: {},
+    create: {
+      code,
+      name: code
+    }
+  });
+  return state.id;
+}
 
 function getGroups(payload: JWTPayload): string[] {
   const groups = payload["cognito:groups"];
@@ -75,19 +89,27 @@ export async function requireAuth(
     const role = roleHeader === "admin" ? "admin" : "state_user";
     const sub = request.headers.get("x-dev-sub") || `dev-${role}`;
     const email = request.headers.get("x-dev-email") || `dev-${role}@local.test`;
+    const stateId = await resolveDevStateId(request);
     let user = await prisma.user.findUnique({ where: { cognitoSub: sub } });
     if (!user) {
       user = await prisma.user.create({
         data: {
           cognitoSub: sub,
           email,
-          role
+          role,
+          stateId
         }
+      });
+    } else if (user.stateId !== stateId) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { stateId }
       });
     }
     if (!ensureRole(expectedRole, role)) {
       return { ok: false, status: 403, error: "Forbidden", details: { role } };
     }
+    const resolvedStateId = user.stateId ?? stateId;
     return {
       ok: true,
       context: {
@@ -97,7 +119,7 @@ export async function requireAuth(
         user: {
           id: user.id,
           role: user.role,
-          stateId: user.stateId,
+          stateId: resolvedStateId,
           cognitoSub: user.cognitoSub,
           email: user.email
         }
@@ -143,16 +165,6 @@ export async function requireAuth(
     where: { cognitoSub }
   });
 
-  if (!user && role === "admin") {
-    user = await prisma.user.create({
-      data: {
-        cognitoSub,
-        email,
-        role: "admin"
-      }
-    });
-  }
-
   if (!user) {
     return {
       ok: false,
@@ -161,13 +173,12 @@ export async function requireAuth(
       details: { message: "User is not provisioned in platform database" }
     };
   }
-
-  if (role === "state_user" && !user.stateId) {
+  if (!user.stateId) {
     return {
       ok: false,
       status: 403,
       error: "Forbidden",
-      details: { message: "State user is missing state assignment" }
+      details: { message: "User is missing required state assignment" }
     };
   }
 

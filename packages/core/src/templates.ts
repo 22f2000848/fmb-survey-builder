@@ -85,7 +85,7 @@ export async function listTemplates(context: AuthContext, productCode: string) {
   }
 
   if (!isAdmin(context)) {
-    const stateId = context.user.stateId as string;
+    const stateId = context.user.stateId;
     const enabled = await prisma.stateProduct.findFirst({
       where: {
         stateId,

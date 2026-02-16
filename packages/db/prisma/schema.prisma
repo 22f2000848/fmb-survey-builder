@@ -12,14 +12,19 @@ enum UserRole {
   state_user
 }
 
+enum DatasetLifecycle {
+  DRAFT
+  PUBLISHED
+}
+
 model User {
   id         String   @id @default(cuid())
   cognitoSub String   @unique
   email      String?
   fullName   String?
   role       UserRole
-  stateId    String?
-  state      State?   @relation(fields: [stateId], references: [id], onDelete: SetNull)
+  stateId    String
+  state      State    @relation(fields: [stateId], references: [id], onDelete: Restrict)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   createdDatasets Dataset[] @relation("DatasetCreator")
@@ -92,6 +97,9 @@ model Dataset {
   stateId         String
   createdByUserId String
   version         Int         @default(1)
+  lifecycle       DatasetLifecycle @default(DRAFT)
+  isActiveDraft   Boolean     @default(false)
+  publishedVersion Int?
   metadata        Json?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
@@ -103,6 +111,8 @@ model Dataset {
   auditLogs       AuditLog[]
 
   @@index([stateId, productId])
+  @@index([stateId, productId, lifecycle, isActiveDraft])
+  @@index([stateId, productId, publishedVersion])
   @@index([templateId])
   @@index([createdByUserId])
 }

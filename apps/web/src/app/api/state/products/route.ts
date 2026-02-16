@@ -14,7 +14,7 @@ export async function GET(request: Request) {
       return ok([]);
     }
 
-    const rows = await listEnabledProductsForState(auth.context.user.stateId as string);
+    const rows = await listEnabledProductsForState(auth.context.user.stateId);
     return ok(
       rows.map((row) => ({
         stateId: row.stateId,
