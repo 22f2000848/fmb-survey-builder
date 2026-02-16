@@ -89,7 +89,7 @@ cp data/store.json.template data/store.json
 npm start
 ```
 
-The server will start on `http://localhost:5000`
+The server will start on `http://localhost:5001`
 
 For development with auto-reload:
 ```bash
@@ -236,6 +236,89 @@ This format matches the FMB reference specification for multi-language surveys.
 
 - **CSV (.csv)** - UTF-8 encoded, comma-separated values
 - **Excel (.xlsx, .xls)** - Microsoft Excel format with one or more sheets
+
+## Behavior Changes
+
+- `availableMediums` now accepts either comma-separated string (`"English,Hindi"`) or array (`["English","Hindi"]`) and validates each trimmed entry.
+- `PUT /api/surveys/:id` now rejects payloads where `surveyId` does not match `:id` with a `400` error.
+- `POST /api/import` now rejects duplicate Survey IDs by default.
+- `POST /api/import?overwrite=true` explicitly replaces existing surveys/questions for matching Survey IDs.
+- Duplicate question API now supports optional `newQuestionId`; it validates format and uniqueness when provided.
+- Export now uses quoted `Content-Disposition` filename with UTF-8-safe fallback.
+- Translation route now enforces timeout, respects upstream URL port, and returns structured errors (`status`, `error`, `message`, `details`).
+- CSV schema detection in upload validation now uses stronger header matching and supports explicit schema selection via `?schema=survey|question|both`.
+
+## How To Validate
+
+### 1) Install and run
+
+Backend:
+
+```bash
+cd server
+npm install
+npm run dev
+```
+
+Frontend:
+
+```bash
+cd client
+npm install
+npm start
+```
+
+### 2) API checks (curl)
+
+Create survey with `availableMediums` as string:
+
+```bash
+curl -X POST http://localhost:5001/api/surveys \
+  -H "Content-Type: application/json" \
+  -d '{"surveyId":"DOC_MEDIUM_STR","surveyName":"Doc Test","surveyDescription":"desc","availableMediums":"English,Hindi","public":"Yes","inSchool":"Yes","acceptMultipleEntries":"Yes","isActive":"Yes","downloadResponse":"No","geoFencing":"No","geoTagging":"No","testSurvey":"No","visibleOnReportBot":"No","mode":"New Data"}'
+```
+
+Create survey with `availableMediums` as array:
+
+```bash
+curl -X POST http://localhost:5001/api/surveys \
+  -H "Content-Type: application/json" \
+  -d '{"surveyId":"DOC_MEDIUM_ARR","surveyName":"Doc Test Array","surveyDescription":"desc","availableMediums":["English","Gujarati"],"public":"Yes","inSchool":"Yes","acceptMultipleEntries":"Yes","isActive":"Yes","downloadResponse":"No","geoFencing":"No","geoTagging":"No","testSurvey":"No","visibleOnReportBot":"No","mode":"New Data"}'
+```
+
+Survey update mismatch should fail:
+
+```bash
+curl -X PUT http://localhost:5001/api/surveys/DOC_MEDIUM_STR \
+  -H "Content-Type: application/json" \
+  -d '{"surveyId":"DIFFERENT_ID","surveyName":"Doc Test","surveyDescription":"desc","availableMediums":"English","public":"Yes","inSchool":"Yes","acceptMultipleEntries":"Yes","isActive":"Yes","downloadResponse":"No","geoFencing":"No","geoTagging":"No","testSurvey":"No","visibleOnReportBot":"No","mode":"New Data"}'
+```
+
+Import duplicate behavior:
+
+```bash
+# First import
+curl -X POST http://localhost:5001/api/import -F "file=@./sample-survey.csv"
+
+# Duplicate import should fail by default
+curl -X POST http://localhost:5001/api/import -F "file=@./sample-survey.csv"
+
+# Duplicate import should succeed with overwrite
+curl -X POST "http://localhost:5001/api/import?overwrite=true" -F "file=@./sample-survey.csv"
+```
+
+Check export headers:
+
+```bash
+curl -I http://localhost:5001/api/export/DOC_MEDIUM_STR
+```
+
+### 3) UI checks
+
+- Survey form: create/edit survey with multiple languages.
+- Import screen: verify duplicate rejection by default and overwrite behavior when enabled.
+- Question list: duplicate question with custom ID, conflict ID, and auto-generated ID.
+- Question list export: verify file downloads and repeated downloads still work.
 
 
 ## Excel Format

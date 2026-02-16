@@ -21,13 +21,17 @@ router.get('/:surveyId', async (req, res) => {
     const workbook = await excelGenerator.generateExcel(survey, questions);
     
     // Set response headers
+    const rawFilename = `${survey.surveyId}_dump.xlsx`;
+    const safeFilename = rawFilename.replace(/["\\]/g, '_');
+    const encodedFilename = encodeURIComponent(rawFilename);
+
     res.setHeader(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     );
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename=${survey.surveyId}_dump.xlsx`
+      `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodedFilename}`
     );
     
     // Write to response

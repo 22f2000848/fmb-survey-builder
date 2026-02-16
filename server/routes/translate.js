@@ -6,19 +6,45 @@ const router = express.Router();
 
 const TRANSLATE_API_URL = process.env.TRANSLATE_API_URL || 'https://libretranslate.de/translate';
 const TRANSLATE_API_KEY = process.env.TRANSLATE_API_KEY || '';
+const TRANSLATE_TIMEOUT_MS = Number.parseInt(process.env.TRANSLATE_TIMEOUT_MS || '10000', 10);
+
+function sendStructuredError(res, status, error, message, details = []) {
+  return res.status(status).json({
+    status,
+    error,
+    message,
+    details,
+    errors: [message]
+  });
+}
 
 router.post('/', (req, res) => {
   const { text, source = 'en', target } = req.body || {};
+  const timeoutMs = Number.isFinite(TRANSLATE_TIMEOUT_MS) && TRANSLATE_TIMEOUT_MS > 0
+    ? TRANSLATE_TIMEOUT_MS
+    : 10000;
 
   if (!text || !target) {
-    return res.status(400).json({ error: 'Missing text or target language' });
+    return sendStructuredError(
+      res,
+      400,
+      'Missing text or target language',
+      'Both "text" and "target" are required for translation',
+      [{ field: !text ? 'text' : 'target' }]
+    );
   }
 
   let url;
   try {
     url = new URL(TRANSLATE_API_URL);
   } catch (error) {
-    return res.status(500).json({ error: 'Invalid translation API URL' });
+    return sendStructuredError(
+      res,
+      500,
+      'Invalid translation API URL',
+      'TRANSLATE_API_URL must be a valid absolute URL',
+      [{ value: TRANSLATE_API_URL }]
+    );
   }
 
   const payload = {
@@ -35,9 +61,24 @@ router.post('/', (req, res) => {
   const body = JSON.stringify(payload);
 
   const transport = url.protocol === 'http:' ? http : https;
+  let responded = false;
+
+  const finalizeError = (status, message, details = []) => {
+    if (responded) return;
+    responded = true;
+    sendStructuredError(res, status, 'Translation failed', message, details);
+  };
+
+  const finalizeSuccess = (translatedText) => {
+    if (responded) return;
+    responded = true;
+    res.json({ translatedText });
+  };
+
   const request = transport.request(
     {
       hostname: url.hostname,
+      port: url.port || (url.protocol === 'https:' ? 443 : 80),
       path: `${url.pathname}${url.search}`,
       method: 'POST',
       headers: {
@@ -52,22 +93,33 @@ router.post('/', (req, res) => {
       });
       response.on('end', () => {
         if (response.statusCode < 200 || response.statusCode >= 300) {
-          return res.status(502).json({ error: 'Translation failed', message: data });
+          return finalizeError(502, 'Upstream translation service returned a non-success status', [
+            { upstreamStatus: response.statusCode },
+            { upstreamBody: data }
+          ]);
         }
 
         try {
           const parsed = JSON.parse(data);
           const translatedText = parsed.translatedText || parsed.translation || '';
-          return res.json({ translatedText });
+          return finalizeSuccess(translatedText);
         } catch (error) {
-          return res.status(502).json({ error: 'Translation failed', message: 'Invalid response' });
+          return finalizeError(
+            502,
+            'Upstream translation response was not valid JSON',
+            [{ upstreamBody: data }]
+          );
         }
       });
     }
   );
 
+  request.setTimeout(timeoutMs, () => {
+    request.destroy(new Error(`Translation request timed out after ${timeoutMs}ms`));
+  });
+
   request.on('error', (error) => {
-    res.status(502).json({ error: 'Translation failed', message: error.message });
+    finalizeError(502, error.message, [{ code: error.code || 'UNKNOWN' }]);
   });
 
   request.write(body);

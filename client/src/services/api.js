@@ -89,14 +89,23 @@ export const exportAPI = {
       responseType: 'blob'
     });
     
-    // Create download link
-    const url = window.URL.createObjectURL(new Blob([response.data]));
+    let url = '';
     const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `${surveyId}_dump.xlsx`);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+    try {
+      // Create download link
+      url = window.URL.createObjectURL(new Blob([response.data]));
+      link.href = url;
+      link.setAttribute('download', `${surveyId}_dump.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+    } finally {
+      if (link.parentNode) {
+        link.parentNode.removeChild(link);
+      }
+      if (url) {
+        window.URL.revokeObjectURL(url);
+      }
+    }
     
     return true;
   }

@@ -6,6 +6,30 @@ const ExcelJS = require('exceljs');
 const validationEngine = require('../validation/validationEngine');
 const path = require('path');
 
+const SUPPORTED_SCHEMAS = ['survey', 'question', 'both'];
+const SURVEY_SCHEMA_HEADERS = new Set([
+  'surveyid',
+  'surveyname',
+  'surveydescription',
+  'availablemediums',
+  'public',
+  'inschool',
+  'acceptmultipleentries',
+  'launchdate',
+  'closedate'
+]);
+const QUESTION_SCHEMA_HEADERS = new Set([
+  'questionid',
+  'questiontype',
+  'questiondescription',
+  'medium',
+  'ismandatory',
+  'sourcequestion',
+  'tableheadervalue',
+  'tablequestionvalue',
+  'options'
+]);
+
 // Configure multer for file uploads
 const storage = multer.memoryStorage();
 const upload = multer({
@@ -34,6 +58,15 @@ router.post('/', upload.single('file'), async (req, res) => {
     }
 
     const schema = req.query.schema || 'both';
+    if (!SUPPORTED_SCHEMAS.includes(schema)) {
+      return res.status(400).json({
+        error: 'Invalid schema query parameter',
+        message: 'schema must be one of: survey, question, both',
+        details: [{ field: 'schema', value: schema }],
+        errors: ['schema must be one of: survey, question, both']
+      });
+    }
+
     const fileExt = path.extname(req.file.originalname).toLowerCase();
     
     let surveyData = [];
@@ -48,17 +81,26 @@ router.post('/', upload.single('file'), async (req, res) => {
         trim: true
       });
 
-      // Determine if CSV is survey or question data based on columns
       if (records.length > 0) {
-        const firstRecord = records[0];
-        if (firstRecord['Survey ID'] || firstRecord['surveyId']) {
+        const detectedSchema = detectCsvSchema(records, schema);
+
+        if (!detectedSchema) {
+          return res.status(400).json({
+            error: 'Unable to detect CSV schema',
+            message: 'CSV headers do not match Survey Master or Question Master. Use ?schema=survey or ?schema=question to force schema selection.',
+            details: [{ schema, headers: Object.keys(records[0] || {}) }],
+            errors: ['CSV schema detection failed']
+          });
+        }
+
+        if (detectedSchema === 'survey') {
           surveyData = records.map((record, index) => {
             const normalized = normalizeKeys(record);
             normalized._excelRow = index + 2; // +2 for header row and 0-index
             normalized._sheetName = 'CSV';
             return normalized;
           });
-        } else if (firstRecord['Question ID'] || firstRecord['questionId']) {
+        } else if (detectedSchema === 'question') {
           questionData = records.map((record, index) => {
             const normalized = normalizeKeys(record);
             normalized._excelRow = index + 2; // +2 for header row and 0-index
@@ -207,6 +249,55 @@ function parseExcelSheet(sheet, sheetName) {
   });
 
   return data;
+}
+
+function normalizeHeaderKey(header) {
+  return String(header || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function countMatchingHeaders(headers, expectedHeaders) {
+  return headers.reduce((count, header) => (
+    expectedHeaders.has(header) ? count + 1 : count
+  ), 0);
+}
+
+function detectCsvSchema(records, requestedSchema) {
+  if (requestedSchema === 'survey' || requestedSchema === 'question') {
+    return requestedSchema;
+  }
+
+  if (!records || records.length === 0) {
+    return null;
+  }
+
+  const normalizedHeaders = Object.keys(records[0]).map(normalizeHeaderKey);
+  const surveyMatches = countMatchingHeaders(normalizedHeaders, SURVEY_SCHEMA_HEADERS);
+  const questionMatches = countMatchingHeaders(normalizedHeaders, QUESTION_SCHEMA_HEADERS);
+  const hasSurveyId = normalizedHeaders.includes('surveyid');
+  const hasQuestionId = normalizedHeaders.includes('questionid');
+
+  if (surveyMatches >= 2 && questionMatches < 2) {
+    return 'survey';
+  }
+
+  if (questionMatches >= 2 && surveyMatches < 2) {
+    return 'question';
+  }
+
+  // Backward-compatible fallback for older CSV files with sparse headers.
+  if (hasQuestionId && !hasSurveyId) {
+    return 'question';
+  }
+
+  if (hasSurveyId && !hasQuestionId) {
+    return 'survey';
+  }
+
+  return null;
 }
 
 /**
