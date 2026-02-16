@@ -11,6 +11,9 @@
     "test": "echo \"No tests yet\""
   },
   "dependencies": {
+    "@cg-dump/core": "1.0.0",
+    "@cg-dump/db": "1.0.0",
+    "@cg-dump/shared": "1.0.0",
     "@aws-sdk/client-cognito-identity-provider": "^3.883.0",
     "@aws-sdk/client-s3": "^3.883.0",
     "@aws-sdk/s3-request-presigner": "^3.883.0",

@@ -36,3 +36,5 @@ temp/
 server/data/store.json
 apps/web/data/store.json
 apps/web/data/uploads/
+
+apps/web/tsconfig.tsbuildinfo

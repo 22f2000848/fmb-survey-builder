@@ -1,0 +1,35 @@
+import { setStateProductEnablement } from "@cg-dump/core";
+import { SetStateProductSchema } from "@cg-dump/shared";
+
+import { withAuth } from "@/server/auth";
+import { err, ok, withErrorBoundary } from "@/server/http";
+
+export const runtime = "nodejs";
+
+export async function PUT(request: Request) {
+  return withErrorBoundary(async () => {
+    const auth = await withAuth(request, "admin");
+    if (!auth.ok) return auth.response;
+
+    const body = await request.json();
+    const parsed = SetStateProductSchema.safeParse(body);
+    if (!parsed.success) {
+      return err(400, "Invalid request", parsed.error.flatten());
+    }
+
+    const record = await setStateProductEnablement(parsed.data);
+    return ok({
+      state: {
+        id: record.state.id,
+        code: record.state.code,
+        name: record.state.name
+      },
+      product: {
+        id: record.product.id,
+        code: record.product.code,
+        name: record.product.name
+      },
+      enabled: record.enabled
+    });
+  }, "Failed to update state product enablement");
+}

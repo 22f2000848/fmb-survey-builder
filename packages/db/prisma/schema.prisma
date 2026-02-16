@@ -6,3 +6,58 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+enum UserRole {
+  admin
+  state_user
+}
+
+model User {
+  id         String   @id @default(cuid())
+  cognitoSub String   @unique
+  email      String?
+  fullName   String?
+  role       UserRole
+  stateId    String?
+  state      State?   @relation(fields: [stateId], references: [id], onDelete: SetNull)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([stateId])
+}
+
+model State {
+  id            String         @id @default(cuid())
+  code          String         @unique
+  name          String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  users         User[]
+  stateProducts StateProduct[]
+}
+
+model Product {
+  id            String         @id @default(cuid())
+  code          String         @unique
+  name          String
+  description   String?
+  isGloballyOn  Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  stateProducts StateProduct[]
+}
+
+model StateProduct {
+  id         String   @id @default(cuid())
+  stateId    String
+  productId  String
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  state      State    @relation(fields: [stateId], references: [id], onDelete: Cascade)
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([stateId, productId])
+  @@index([stateId, enabled])
+  @@index([productId, enabled])
+}

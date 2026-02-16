@@ -1,0 +1,32 @@
+import { createStateUser } from "@cg-dump/core";
+import { CreateStateUserSchema } from "@cg-dump/shared";
+
+import { withAuth } from "@/server/auth";
+import { err, ok, withErrorBoundary } from "@/server/http";
+
+export const runtime = "nodejs";
+
+export async function POST(request: Request) {
+  return withErrorBoundary(async () => {
+    const auth = await withAuth(request, "admin");
+    if (!auth.ok) return auth.response;
+
+    const body = await request.json();
+    const parsed = CreateStateUserSchema.safeParse(body);
+    if (!parsed.success) {
+      return err(400, "Invalid request", parsed.error.flatten());
+    }
+
+    const user = await createStateUser(parsed.data);
+    return ok(
+      {
+        id: user.id,
+        cognitoSub: user.cognitoSub,
+        role: user.role,
+        stateId: user.stateId,
+        email: user.email
+      },
+      { status: 201 }
+    );
+  }, "Failed to create state user");
+}
